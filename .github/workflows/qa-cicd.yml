@@ -11,7 +11,7 @@ jobs:
     
     steps:
       - name: 📥 Checkout Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: 🐍 Setup Python 3.11
         uses: actions/setup-python@v4
@@ -30,7 +30,7 @@ jobs:
           python "Test cases/fill_full_report_v30.py"
           
       - name: 💾 Archive Excel Test Report
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always() # Luôn lưu report dù test có Pass hay Fail
         with:
           name: QA_TestReport_FULL_v30

@@ -1,0 +1,49 @@
+name: Tryonic QA Nightly Pipeline
+
+on:
+  schedule:
+    - cron: '0 17 * * *' # Chạy tự động vào 0h00 đêm giờ VN (17h00 UTC)
+  workflow_dispatch: # Cho phép bấm chạy bằng tay trên giao diện Github
+
+jobs:
+  run-tests-and-log-bugs:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v3
+
+      - name: 🐍 Setup Python 3.11
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          
+      - name: 📦 Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          
+      - name: 🧪 Execute QA Test Suite (fill_full_report_v30)
+        run: |
+          echo "Bắt đầu chạy kịch bản Auto-Test và chấm điểm Pass/Fail..."
+          # Lệnh thực thi Test (Có thể tích hợp thêm npx playwright test ở đây)
+          python "Test cases/fill_full_report_v30.py"
+          
+      - name: 💾 Archive Excel Test Report
+        uses: actions/upload-artifact@v3
+        if: always() # Luôn lưu report dù test có Pass hay Fail
+        with:
+          name: QA_TestReport_FULL_v30
+          path: "Test cases/Test_Reports/*.xlsx"
+          
+      - name: 🐞 Auto-Log Failed Bugs to Jira TAS Board
+        if: always() # Luôn chạy để dò tìm Fail case trong Report
+        env:
+          # Github Secrets: Settings > Secrets and variables > Actions
+          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          JIRA_URL: "https://tryonic-ai.atlassian.net"
+          JIRA_PROJECT_KEY: "TAS"
+        run: |
+          echo "Kích hoạt Skill jira-bug-logging quét report và bắn API..."
+          python ".agent/skills/jira-bug-logging/scripts/batch_jira_sync.py"

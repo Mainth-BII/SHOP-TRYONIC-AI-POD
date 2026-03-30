@@ -1,0 +1,61 @@
+# POD T-Shirt Platform - Comprehensive Test Case Suite
+
+| TC_ID | US_Mapping | Feature | Module | Title | Type | Priority | Precondition | Steps | Expected_Result |
+|:---|:---|:---|:---|:---|:---|:---|:---|:---|:---|
+| **AUTH - EPIC 1** | | | | | | | | | |
+| TC_AUTH_001 | US-01 | Registration | Signup | Đăng ký bằng Email/Password hợp lệ | Positive | P0 | Trang Signup mở | 1. Nhập Name, Email, Password (Test@123)\n2. Click "Đăng ký" | Báo thành công, gửi mail verify |
+| TC_AUTH_002 | US-01 | Registration | Signup | Đăng ký với pass yếu (thiếu số) | Negative | P0 | Trang Signup mở | 1. Nhập Password: "Password" | Báo lỗi: Min 8 chars, 1 uppercase, 1 number |
+| TC_AUTH_003 | US-02 | Login | OAuth | Đăng nhập bằng Google | Positive | P0 | Đã có tài khoản Google | 1. Click "Login Google" | Đăng nhập thành công |
+| TC_AUTH_004 | US-02b | Login | OAuth | Đăng nhập bằng Facebook | Positive | P0 | Đã có tài khoản Facebook | 1. Click "Login Facebook" | Đăng nhập thành công |
+| TC_AUTH_005 | US-03 | Login | Login | Đăng nhập bằng Email đã verify | Positive | P0 | TK đã verify | 1. Nhập Email/Pass\n2. Click Login | Vào Dashboard, show User Name |
+| TC_AUTH_006 | US-03b | Guest Mode | Browser | Thiết kế áo không cần đăng nhập (Try First) | Positive | P0 | Chưa đăng nhập | 1. Vào Editor\n2. Add artwork/text | Cho phép thao tác bình thường |
+| TC_AUTH_007 | US-03c | Guest Mode | Migration | Yêu cầu đăng nhập khi nhấn Đặt hàng (Guest) | Positive | P0 | Guest có hàng trong giỏ | 1. Click "Thanh toán" | Hiện popup Login/Register, giữ design |
+| TC_AUTH_008 | US-04 | Account | Security | Reset password qua Email | Positive | P0 | Quên mật khẩu | 1. Click "Quên mật khẩu"\n2. Nhập Email | Nhận link reset (1h), đổi pass thành công |
+| TC_AUTH_009 | US-05 | Profile | Account | Cập nhật Profile (Phone, Avatar, Address) | Positive | P1 | Đã đăng nhập | 1. Sửa Profile\n2. Click Save | Hệ thống lưu và hiển thị data mới |
+| **TEMPLATE - EPIC 2** | | | | | | | | | |
+| TC_TEM_001 | US-06 | Gallery | Browse | Duyệt Template Gallery | Positive | P0 | Vào trang Template | 1. Scroll gallery | Load 20 items/page (lazy load) |
+| TC_TEM_002 | US-07 | Gallery | Search | Tìm kiếm Template theo keyword | Positive | P0 | Trong danh sách template | 1. Search "Vintage" | Show các bản mẫu khớp tên/tag |
+| TC_TEM_003 | US-08 | Gallery | Filter | Lọc Template theo Category | Positive | P0 | Trong danh sách template | 1. Chọn Category: "Sport" | Show templates thể thao |
+| TC_TEM_004 | US-09 | Gallery | Editor | Mở Template vào Editor | Positive | P0 | Thấy template ưng ý | 1. Click template icon | Template xuất hiện trên Canvas |
+| **PRODUCT - EPIC 3** | | | | | | | | | |
+| TC_PRO_001 | US-10 | Product | Select | Chọn loại áo (T-shirt, Polo) | Positive | P0 | Editor mở | 1. Chọn menu sản phẩm | Mockup đổi loại áo tương ứng |
+| TC_PRO_002 | US-11 | Product | Color | Chọn màu sắc áo realtime | Positive | P0 | Editor mở | 1. Click swatch màu | Áo mockup đổi màu ngay lập tức |
+| TC_PRO_003 | US-12 | Product | Size | Xem Size Chart chuẩn | Positive | P0 | Popup Size chart mở | 1. So bảng size (S-2XL) | Thông số Vai, Ngực... chính xác (cm) |
+| TC_PRO_004 | US-12b | Smart Fit | AI Suggest | Gợi ý Size bằng AI (BMI) | Positive | P0 | Popup Fit-Size | 1. Nhập H, W, Gender | Show: "Size L (Khớp 90%)" |
+| TC_PRO_005 | US-12c | Product | Skip Edit | Mua áo trơn (không thiết kế) | Positive | P0 | Trang chi tiết SP | 1. Click "Mua ngay" | Add trơn vào giỏ, không mở Editor |
+| **DESIGN - EPIC 4** | | | | | | | | | |
+| TC_DES_001 | US-13 | Editor | Upload | Upload ảnh cá nhân (PNG < 25MB) | Positive | P0 | Editor mở | 1. Click Upload\n2. Chọn file PNG | Ảnh hiện trên Canvas |
+| TC_DES_002 | US-14 | Editor | Canvas | Thao tác Layer (Drag, Resize, Rotate) | Positive | P0 | Đã có layer | 1. Thao tác chuột | Layer đổi scale/rotate mượt mà |
+| TC_DES_003 | US-15 | Editor | Text | Thêm và định dạng Text layers | Positive | P0 | Editor mở | 1. Click "Add Text"\n2. Đổi Font/Màu | Text hiện đúng style |
+| TC_DES_004 | US-16 | Editor | Utility | Hiển thị Safe Zone print boundary | Positive | P0 | Editor mở | 1. Check canvas edges | Hiện đường viền mờ, warning khi lấn |
+| TC_DES_005 | US-17 | Editor | Utility | Switch Front/Back view | Positive | P0 | Editor mở | 1. Click switch icon | View thay đổi, layer mặt kia ẩn đi |
+| TC_DES_006 | US-18 | Editor | History | Undo/Redo thao tác thiết kế | Positive | P1 | Có >2 thao tác | 1. Click Undo/Redo | Trạng thái canvas hồi phục chính xác |
+| TC_DES_007 | US-19 | Editor | Save | Save Design vào My Designs | Positive | P0 | Design dở dang | 1. Click "Save" | Lưu vào <code>user_designs</code> table |
+| **ORDER - EPIC 5/6** | | | | | | | | | |
+| TC_ORD_001 | US-20 | Cart | Add | Checkout giỏ hàng (Size/Qty) | Positive | P0 | Có hàng trong giỏ | 1. Click "Checkout" | Vào trang nhập thông tin order |
+| TC_ORD_002 | US-21 | Checkout | Address | Nhập địa chỉ ship (City/Dist/Ward) | Positive | P0 | Trang Checkout | 1. Nhập bưu cụ hợp lệ | Hệ thống parse phí ship |
+| TC_ORD_003 | US-22 | Checkout | Delivery | Chọn gói Delivery (Express/Standard) | Positive | P0 | Trang Checkout | 1. Toggle gói vận chuyển | Tổng tiền cộng ship update realtime |
+| TC_ORD_004 | US-23 | Checkout | Discount | Áp mã Discount hợp lệ | Positive | P1 | Trang Checkout | 1. Nhập valid code | Tiền được trừ |
+| TC_ORD_005 | US-23b | Checkout | Transparency | Xem biểu đồ Cost Breakdown | Positive | P0 | Trang Checkout | 1. Click "Tại sao giá này?" | Hiện chart (Phôi + In + Ship) |
+| TC_ORD_006 | US-24 | Payment | Online | Thanh toán VNPay (ATM/QR) | Positive | P0 | Đã Redirect VNPay | 1. Thực hiện thanh toán | Sync trạng thái đơn = Confirmed |
+| TC_ORD_007 | US-25 | Payment | Bank | Thanh toán chuyển khoản ngân hàng | Positive | P0 | Checkout done | 1. Show STK/Mã đơn | Hiện QR, trạng thái Pending xác nhận |
+| TC_ORD_008 | US-26 | Order | List | Xem lịch sử đơn hàng | Positive | P0 | TK đã có >1 đơn | 1. Vào "My Orders" | Hiện list mã đơn, ngày, tiền |
+| TC_ORD_009 | US-27 | Order | Detail | Track trạng thái đơn (Confirmed->Delivered) | Positive | P0 | Đơn đang xử lý | 1. Xem Timeline | Show mốc status thực tế |
+| TC_ORD_010 | US-28 | Order | Action | Hủy đơn trước khi in (Status: Pending) | Positive | P0 | Đơn chưa Confirm/Print | 1. Click "Cancel" | Status = Cancelled |
+| TC_ORD_011 | US-29 | Order | Feedback | Rate (1-5*) & Review sau khi giao | Positive | P1 | Đơn status: Delivered | 1. Click Rate | Lưu review vào DB |
+| **ADMIN - EPIC 7** | | | | | | | | | |
+| TC_ADM_001 | US-30 | CMS | Dash | Xem Dashboard thống kê kinh doanh | Positive | P0 | Admin login | 1. Vào Dashboard | Show: Tổng đơn, Doanh thu, KH mới |
+| TC_ADM_002 | US-31 | CMS | Order | Phê duyệt đơn và cập nhật status | Positive | P0 | CMS Order list | 1. Update Pending -> Confirmed | System notify user |
+| TC_ADM_003 | US-32 | CMS | Catalog | Quản lý Product (Active/Inactive loại áo) | Positive | P0 | CMS Product list | 1. Toggle Inactive | Loại áo tương ứng ẩn khỏi web user |
+| TC_ADM_004 | US-33 | CMS | Gallery | Quản lý Gallery Templates | Positive | P0 | CMS Template list | 1. Upload/Hide template | Web gallery update realtime |
+| TC_ADM_005 | US-34 | CMS | Promo | Quản lý Discount code (Mã, Hạn dùng) | Positive | P1 | CMS Discount list | 1. Tạo mã mới | Mã có thể dùng ngay tại Checkout |
+| TC_ADM_006 | US-35 | CMS | User | Lock/Unlock tài khoản user | Positive | P0 | CMS User detail | 1. Click Lock (Lý do: Fraud) | User ko thể login |
+| TC_ADM_007 | US-36 | CMS | Report | Export danh sách User CSV | Positive | P1 | CMS User list | 1. Click Export | Tải file report 8 cột chuẩn |
+| TC_ADM_008 | US-36b | CMS | AI | Cấu hình giới hạn AI Quota hàng ngày | Positive | P0 | CMS Settings | 1. Sửa lượt Gen: 10->20 | Áp dụng cho toàn bộ user |
+| **AI - EPIC 8/9** | | | | | | | | | |
+| TC_AI_001 | US-37 | AI Gen | Engine | Nhập Prompt tạo Artwork (2-4 variations) | Positive | P0 | Quota > 0 | 1. Nhập Prompt VN\n2. Click Gen | Show 2-4 variations (512px) |
+| TC_AI_002 | US-38 | AI Gen | Upscale | Upscale on Select (Dùng artwork này) | Positive | P0 | Đã gen preview | 1. Click "Dùng ngay" | Trừ 3 credits, Upscale > 2048px |
+| TC_AI_003 | US-39 | AI Gen | UX | Hiển thị Aha Moment trong khi render | Positive | P1 | Đang render | 1. Quan sát màn hình | Rotate messages: "Đang tính vải..." |
+| TC_AI_004 | US-40 | Credits | Profile | Xem số dư Credits trong Profile | Positive | P0 | Đã login | 1. Nhìn header/profile | Show số dư thực tế |
+| TC_AI_005 | US-41 | Credits | Earn | Tặng credits khi đơn hàng Delivered | Positive | P0 | Order Delivered | 1. Admin cập nhật đơn | Balance +10 credits |
+| TC_AI_006 | US-42 | Credits | Spend | Dùng credits thay tiền mặt cho AI features | Positive | P0 | Có credits | 1. Thực hiện Gen/Upscale | Trừ balance, ko yêu cầu thanh toán |

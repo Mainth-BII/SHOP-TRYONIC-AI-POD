@@ -1,0 +1,12 @@
+﻿TC_ID,Environment,Status,Error_Message,Screenshot_Path,Actual_Response,Executed_At
+TC_LOG_001,Chrome Desktop,PASS,,screenshots\Login\TC_LOG_001_desktop_chrome_PASS.png,,2026-03-09 18:38:47
+TC_LOG_001,Firefox Desktop,PASS,,screenshots\Login\TC_LOG_001_desktop_firefox_PASS.png,,2026-03-09 18:38:55
+TC_LOG_001,Safari Desktop,PASS,,screenshots\Login\TC_LOG_001_desktop_webkit_PASS.png,,2026-03-09 18:39:00
+TC_LOG_001,iPhone 13 Pro,FAIL,"Locator expected to be in viewport
+Actual value: viewport ratio 0.15625 
+Call log:
+  - Expect ""to_be_in_viewport"" with timeout 5000ms
+  - waiting for locator(""input[name='email']"")
+    8 × locator resolved to <input name=""email"" placeholder=""Hãy nhập email đăng nhập."" class=""w-full bg-white border border-gray-200 rounded-lg h-11 px-3 text-sm outline-none transition-colors hover:border-primary focus:border-primary""/>
+      - unexpected value ""viewport ratio 0.15625""
+",screenshots\Login\TC_LOG_001_iphone_13_pro_FAIL.png,,2026-03-09 18:39:09

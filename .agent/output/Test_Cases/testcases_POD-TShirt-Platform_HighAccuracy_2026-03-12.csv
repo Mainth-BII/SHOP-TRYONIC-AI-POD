@@ -1,0 +1,9 @@
+﻿TC_ID,Title,Module,Source_FR,Priority,Type,Scope,Preconditions,Step_1,Step_2,Step_3,Expected_Result,Test_Data,Browser_Context,Status
+AUTH-001,Email Registration (Standard),Auth,FR-01.1,P1,Functional,Smoke,Browser open,Enter valid email/pwd,Submit,Check email,"Account created (Inactive), Verification email sent (24h link)",test@example.com,Desktop,Draft
+AUTH-002,Access Token Expiry (15m),Auth,FR-02.2,P1,Security,Regression,User logged in,Wait 15 minutes,Perform any action,,"Token expires, App auto-renews via Refresh Token (Stateless)",User Session,All,Draft
+AUTH-005,Welcome Bonus Logic,Credits,FR-15.9,P1,Functional,Smoke,New user,Register new account,,,user_credits table shows +5 credits bonus,New Account,All,Draft
+AI-001,AI Generation Expense,AI,FR-15.3,P1,Functional,Smoke,10 credits balance,Input prompt,Click Generate,,"5 credits deducted, Balance = 5, 2-4 variations shown (512px)",Prompt: Cyberpunk Cat,All,Draft
+AI-002,AI Upscale Expense,AI,FR-15.3,P1,Functional,Smoke,Artwork selected,Choose variation,Click Upscale,,"3 credits deducted, Image processed to >=2048px",Selected Artwork,All,Draft
+AI-003,Daily Quota Limit,AI,FR-14.6,P2,Functional,Edge,10 gens performed,Attempt 11th generation,,,"Error: 'Daily limit reached', No credits deducted",User at Quota,All,Draft
+FIT-001,Smart Fit Suggestion,Shop,FR-13.3,P2,UI/Functional,Smoke,Product detail open,"Enter H:170cm, W:65kg, G:Male",,,"Suggets 'Size M', Displays 'Confidence: 92%'","H:170, W:65, G:M",All,Draft
+PAY-002,Credit Earn Confirmation,Credits,FR-15.2,P1,Functional,Regression,Order Delivered,Admin status -> Delivered,,,"+10 credits added to user, Notification N-22 received",Order ID,Backend/Admin,Draft

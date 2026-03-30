@@ -1,7 +1,7 @@
 import openpyxl, os, datetime, shutil
 from openpyxl.styles import Font, PatternFill, Alignment
 
-BASE = r"e:\BII\QA-NEW\Tool\antigravity-tryonic-main\Test cases"
+BASE = os.path.dirname(os.path.abspath(__file__))
 SRC = os.path.join(BASE, "TC_POD-TShirt-Platform_ExecutionSummary_v30_2026-03-27_artwork_vi.xlsx")
 
 today = datetime.date.today().strftime("%Y-%m-%d")

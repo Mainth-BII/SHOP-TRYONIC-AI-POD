@@ -120,6 +120,25 @@ def build_payload(
                             if failed_section
                             else []
                         ),
+                        *(
+                            [
+                                {
+                                    "header": "Failure Summary",
+                                    "collapsible": True,
+                                    "widgets": [
+                                        {
+                                            "textParagraph": {
+                                                "text": (
+                                                    f"<b>❌ Error:</b> {gen_details.get('Actual_Result', 'No details available')}"
+                                                )
+                                            }
+                                        }
+                                    ],
+                                }
+                            ]
+                            if failed > 0 and gen_details.get("Actual_Result")
+                            else []
+                        ),
                         {
                             "widgets": [
                                 {

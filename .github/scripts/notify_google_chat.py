@@ -20,12 +20,15 @@ def get_env(key: str, default: str = "") -> str:
 
 def _parse_csv_report() -> dict:
     """Parse the latest RESULT_*.csv to find TC_GEN_001 details."""
-    report_files = glob.glob("tests/test_reports/RESULT_*.csv")
+    # Look in root test_reports and tests/test_reports
+    report_files = glob.glob("**/RESULT_*.csv", recursive=True)
     if not report_files:
+        print("[notify] No RESULT_*.csv found.")
         return {}
     
     # Get the most recent report
     latest_report = max(report_files, key=os.path.getmtime)
+    print(f"[notify] Found CSV: {latest_report}")
     
     try:
         import csv
@@ -143,9 +146,12 @@ def build_payload(
 
 def _parse_failures() -> list[str]:
     """Parse failed test names from junit.xml if present."""
-    junit_path = "tests/test_reports/junit.xml"
-    if not os.path.exists(junit_path):
+    # Look in root test_reports and tests/test_reports
+    junit_files = glob.glob("**/junit.xml", recursive=True)
+    if not junit_files:
         return []
+    
+    junit_path = max(junit_files, key=os.path.getmtime)
     try:
         import xml.etree.ElementTree as ET
         tree = ET.parse(junit_path)

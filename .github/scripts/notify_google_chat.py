@@ -254,32 +254,8 @@ def main() -> None:
     ok = send(webhook_url, payload)
 
     # Send screenshot follow-up (on FAIL or for TC_GEN_001 PASS)
-    if failed > 0:
-        shots = collect_screenshots()
-        if shots:
-            filenames = "\n".join(f"📸 {os.path.basename(s)}" for s in shots)
-            followup = {
-                "text": (
-                    f"*Failed test screenshots* (view in Actions artifacts):\n"
-                    f"{filenames}\n"
-                    f"<{run_url}|📎 View run & artifacts>"
-                )
-            }
-            send(webhook_url, followup)
-    elif passed > 0 and gen_details.get("TC_ID") == "TC_GEN_001":
-        # Specific pass report for TC_GEN_001
-        evidence = gen_details.get("Evidence")
-        if evidence and os.path.exists(evidence):
-            filename = os.path.basename(evidence)
-            followup = {
-                "text": (
-                    f"✅ *TC_GEN_001 Artwork Result*:\n"
-                    f"📸 `{filename}`\n"
-                    f"⏱️ Generation Time: `{gen_time}`\n"
-                    f"<{run_url}|📎 View evidence in artifacts>"
-                )
-            }
-            send(webhook_url, followup)
+    # Follow-up messages removed as requested to avoid duplication
+    pass
 
     sys.exit(0 if ok else 1)
 

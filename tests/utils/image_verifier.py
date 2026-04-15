@@ -27,7 +27,7 @@ INSTRUCTIONS FOR EVALUATION:
 3. PLACEHOLDER: Check if it's a generic 3D gift box or loading icon.
 
 Respond ONLY with this JSON (no code fences):
-{{"is_gift_box": true/false, "is_relevant": true/false, "reason": "one concise sentence in English"}}"""
+{{"is_gift_box": true/false, "is_relevant": true/false, "reason": "Hãy viết một câu nhận xét ngắn bằng TIẾNG VIỆT về chất lượng ảnh so với prompt"}}"""
 
 
 def check_artwork(img_bytes: bytes, prompt_text: str) -> Tuple[bool, str]:

@@ -1,15 +1,43 @@
 """Pytest fixtures shared across all Tryonic tests."""
 
 import os
+from datetime import datetime
 import pytest
 from playwright.sync_api import Browser, BrowserContext, Page
 
+import pages.base_page as _base_page
 from utils.report_writer import ReportWriter
 
 # ── Constants ────────────────────────────────────────────────────────────────
 
 BASE_URL = os.getenv("BASE_URL", "https://pre-launch.tryonic.ai")
 HEADLESS = os.getenv("CI", "false").lower() in ("1", "true", "yes")
+
+# ── Screenshot run directory ─────────────────────────────────────────────────
+
+@pytest.fixture(scope="session", autouse=True)
+def _setup_run_dir() -> None:
+    """
+    Create screenshots/DD-MM-YYYY/Lan_N/ for this session and wire it
+    into BasePage.SESSION_RUN_DIR so every take_screenshot() call lands there.
+
+    Lần 1 = first run of the day (08:00), Lần 2 = second run (16:00).
+    """
+    date_str = datetime.now().strftime("%d-%m-%Y")
+    date_folder = os.path.join("screenshots", date_str)
+    os.makedirs(date_folder, exist_ok=True)
+
+    existing = [
+        d for d in os.listdir(date_folder)
+        if os.path.isdir(os.path.join(date_folder, d)) and d.startswith("Lan_")
+    ]
+    run_num = len(existing) + 1
+    run_dir = os.path.join(date_str, f"Lan_{run_num}")
+    os.makedirs(os.path.join("screenshots", run_dir), exist_ok=True)
+
+    _base_page.SESSION_RUN_DIR = run_dir
+    print(f"\n[INFO] Screenshots: screenshots/{run_dir}/")
+
 
 # ── Session-scoped report ────────────────────────────────────────────────────
 

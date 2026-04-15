@@ -4,6 +4,11 @@ import os
 from datetime import datetime
 from playwright.sync_api import Page, expect
 
+# Populated by conftest._setup_run_dir (session autouse fixture).
+# Format: "DD-MM-YYYY/Lan_N"   e.g. "15-04-2026/Lan_1"
+# When set, take_screenshot() saves under screenshots/<SESSION_RUN_DIR>/[folder]/
+SESSION_RUN_DIR: str = ""
+
 
 class BasePage:
     def __init__(self, page: Page, base_url: str):
@@ -19,10 +24,16 @@ class BasePage:
     # ── Screenshots ─────────────────────────────────────────────────────────
 
     def take_screenshot(self, name: str, folder: str = "") -> str:
-        """Capture screenshot and return relative file path."""
-        base_dir = os.path.join("screenshots", folder) if folder else "screenshots"
+        """Capture screenshot under screenshots/DD-MM-YYYY/Lan_N/[folder]/."""
+        import pages.base_page as _m
+        parts = ["screenshots"]
+        if _m.SESSION_RUN_DIR:
+            parts.append(_m.SESSION_RUN_DIR)
+        if folder:
+            parts.append(folder)
+        base_dir = os.path.join(*parts)
         os.makedirs(base_dir, exist_ok=True)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now().strftime("%H%M%S")
         filename = f"{name}_{timestamp}.png"
         path = os.path.join(base_dir, filename)
         self.page.screenshot(path=path, full_page=True)

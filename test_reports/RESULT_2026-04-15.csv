@@ -1,0 +1,2 @@
+﻿TC_ID,Screen,Module,Title,Type,Priority,Steps,Expected_Result,Actual_Result,Result_R1,Test_Date_R1,Tester_R1,Bug_ID_R1,Bug_Desc_R1,Evidence,Notes
+TC_GEN_001,HomePage,ArtworkGeneration,Generate artwork — Vietnamese prompt (step-by-step),,P0,,,"Artwork visible in 47.4s. Dimensions: {'w': 1081, 'h': 513, 'src': 'https://pre-launch.tryonic.ai/assets/POD-C8vccYc4.png'}",PASS,2026-04-15 16:31,Playwright CI,,,screenshots\TC_GEN_001\STEP9_PASS_ket_qua_cuoi_20260415_163103.png,

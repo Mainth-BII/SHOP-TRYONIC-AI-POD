@@ -113,6 +113,22 @@ def tablet_page(browser: Browser) -> Page:
     context.close()
 
 
+# ── Android context — 360x740 ────────────────────────────────────────────────
+
+@pytest.fixture(scope="function")
+def android_page(browser: Browser) -> Page:
+    context = browser.new_context(
+        locale="vi-VN",
+        viewport={"width": 360, "height": 740},
+        is_mobile=True,
+        has_touch=True,
+    )
+    context.set_default_timeout(30_000)
+    pg = context.new_page()
+    yield pg
+    context.close()
+
+
 # ── pytest-playwright options ────────────────────────────────────────────────
 
 def pytest_configure(config):  # noqa: ARG001

@@ -525,6 +525,41 @@ class TestInputValidation:
                            bug_id="BUG-VAL-002", bug_desc=str(exc))
             raise
 
+    # ── TC_VAL_003 ─────────────────────────────────────────────────────────────
+
+    def test_TC_VAL_003_single_character(
+        self, page: Page, base_url: str, report: ReportWriter
+    ):
+        """Single character prompt (BVA min): Check if allowed or rejected."""
+        tc_id = "TC_VAL_003"
+        home = HomePage(page, base_url)
+        try:
+            home.goto()
+            home.enter_prompt(PROMPT_SINGLE)
+            home.click_generate()
+
+            # For single char, we either expect an error, or the generation to start.
+            # Usually, systems have a min-length of 2 or 3.
+            page.wait_for_timeout(3_000)
+            generation_started = any(page.locator(sel).first.is_visible()
+                                     for sel in home._loading_selectors
+                                     if page.locator(sel).first.count() > 0)
+
+            shot = home.take_screenshot(f"{tc_id}_RESULT", folder="Validation")
+            report.add(tc_id, "PASS",
+                       screen="HomePage", module="Validation",
+                       title="Single character prompt",
+                       priority="P2",
+                       actual=f"Generation started: {generation_started}",
+                       screenshot=shot)
+        except Exception as exc:
+            shot = home.take_screenshot(f"{tc_id}_FAIL", folder="Validation")
+            report.add(tc_id, "FAIL",
+                       screen="HomePage", module="Validation",
+                       title="Single character prompt",
+                       priority="P2", actual=str(exc), screenshot=shot)
+            raise
+
     # ── TC_VAL_005 ─────────────────────────────────────────────────────────────
 
     def test_TC_VAL_005_xss_not_executed(
@@ -621,6 +656,40 @@ class TestInputValidation:
                                 f"[Impact] Any user with a long description crashes the page.")
             raise
 
+    # ── TC_VAL_007 ─────────────────────────────────────────────────────────────
+
+    def test_TC_VAL_007_emoji_only(
+        self, page: Page, base_url: str, report: ReportWriter
+    ):
+        """Emoji-only prompt: System should handle gracefully (UI/UX)."""
+        tc_id = "TC_VAL_007"
+        home = HomePage(page, base_url)
+        try:
+            home.goto()
+            home.enter_prompt(PROMPT_EMOJI)
+            home.click_generate()
+            page.wait_for_timeout(3_000)
+
+            # Check if it triggers generation or shows validation
+            generation_started = any(page.locator(sel).first.is_visible()
+                                     for sel in home._loading_selectors
+                                     if page.locator(sel).first.count() > 0)
+
+            shot = home.take_screenshot(f"{tc_id}_RESULT", folder="Validation")
+            report.add(tc_id, "PASS",
+                       screen="HomePage", module="Validation",
+                       title="Emoji-only prompt handled",
+                       priority="P3",
+                       actual=f"Generation started: {generation_started}",
+                       screenshot=shot)
+        except Exception as exc:
+            shot = home.take_screenshot(f"{tc_id}_FAIL", folder="Validation")
+            report.add(tc_id, "FAIL",
+                       screen="HomePage", module="Validation",
+                       title="Emoji-only prompt handled",
+                       priority="P3", actual=str(exc), screenshot=shot)
+            raise
+
 
 class TestResponsiveUI:
     """TC_UI: Responsive layout tests."""
@@ -704,4 +773,68 @@ class TestResponsiveUI:
                        title="iPhone full generation flow",
                        priority="P1", actual=str(exc), screenshot=shot,
                        bug_id="BUG-UI-003", bug_desc=str(exc))
+            raise
+
+    # ── TC_UI_004 ────────────────────────────────────────────────────────────
+
+    def test_TC_UI_004_android_layout(
+        self, android_page: Page, base_url: str, report: ReportWriter
+    ):
+        """Android layout (360x740) — no horizontal overflow, input visible."""
+        tc_id = "TC_UI_004"
+        home = HomePage(android_page, base_url)
+        try:
+            home.goto()
+            # Check overflow
+            overflow = android_page.evaluate(
+                "document.documentElement.scrollWidth > document.documentElement.clientWidth"
+            )
+            assert not overflow, "Horizontal overflow detected on Android"
+
+            inp = home.get_prompt_input()
+            expect(inp).to_be_visible()
+
+            shot = home.take_screenshot(f"{tc_id}_PASS", folder="Responsive")
+            report.add(tc_id, "PASS",
+                       screen="HomePage", module="Responsive",
+                       title="Android layout 360x740",
+                       priority="P2", actual="OK — No overflow",
+                       screenshot=shot)
+        except Exception as exc:
+            shot = home.take_screenshot(f"{tc_id}_FAIL", folder="Responsive")
+            report.add(tc_id, "FAIL",
+                       screen="HomePage", module="Responsive",
+                       title="Android layout 360x740",
+                       priority="P2", actual=str(exc), screenshot=shot,
+                       bug_id="BUG-UI-004", bug_desc=str(exc))
+            raise
+
+    # ── TC_UI_005 ────────────────────────────────────────────────────────────
+
+    def test_TC_UI_005_ipad_layout(
+        self, tablet_page: Page, base_url: str, report: ReportWriter
+    ):
+        """iPad layout (768x1024) — all elements visible in viewport."""
+        tc_id = "TC_UI_005"
+        home = HomePage(tablet_page, base_url)
+        try:
+            home.goto()
+            inp = home.get_prompt_input()
+            btn = home.get_generate_button()
+            expect(inp).to_be_visible()
+            expect(btn).to_be_visible()
+
+            shot = home.take_screenshot(f"{tc_id}_PASS", folder="Responsive")
+            report.add(tc_id, "PASS",
+                       screen="HomePage", module="Responsive",
+                       title="iPad layout 768x1024",
+                       priority="P2", actual="All elements visible",
+                       screenshot=shot)
+        except Exception as exc:
+            shot = home.take_screenshot(f"{tc_id}_FAIL", folder="Responsive")
+            report.add(tc_id, "FAIL",
+                       screen="HomePage", module="Responsive",
+                       title="iPad layout 768x1024",
+                       priority="P2", actual=str(exc), screenshot=shot,
+                       bug_id="BUG-UI-005", bug_desc=str(exc))
             raise

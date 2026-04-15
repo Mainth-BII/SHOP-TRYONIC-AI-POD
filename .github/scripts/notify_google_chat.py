@@ -18,6 +18,28 @@ def get_env(key: str, default: str = "") -> str:
     return os.environ.get(key, default)
 
 
+def _parse_csv_report() -> dict:
+    """Parse the latest RESULT_*.csv to find TC_GEN_001 details."""
+    report_files = glob.glob("tests/test_reports/RESULT_*.csv")
+    if not report_files:
+        return {}
+    
+    # Get the most recent report
+    latest_report = max(report_files, key=os.path.getmtime)
+    
+    try:
+        import csv
+        with open(latest_report, mode="r", encoding="utf-8-sig") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                if row.get("TC_ID") == "TC_GEN_001":
+                    return row
+    except Exception as e:
+        print(f"[notify] Error parsing CSV: {e}")
+    
+    return {}
+
+
 def build_payload(
     status: str,
     total: int,
@@ -41,6 +63,11 @@ def build_payload(
         header_icon = "❌"
         status_text = f"{failed} TEST(S) FAILED"
 
+    # Try to get TC_GEN_001 specific details
+    gen_details = _parse_csv_report()
+    gen_time = gen_details.get("Generation_Time", "N/A")
+    evidence = gen_details.get("Evidence", "None")
+
     # Build failed test list from junit.xml if available
     failed_details = _parse_failures()
     failed_section = ""
@@ -63,13 +90,15 @@ def build_payload(
                             "header": "Test Summary",
                             "collapsible": False,
                             "widgets": [
-                                {
+                                 {
                                     "textParagraph": {
                                         "text": (
                                             f"<b>Total:</b> {total} &nbsp;&nbsp; "
                                             f"<b>✅ Passed:</b> {passed} &nbsp;&nbsp; "
                                             f"<b>❌ Failed:</b> {failed} &nbsp;&nbsp; "
-                                            f"<b>Pass Rate:</b> {pass_rate}"
+                                            f"<b>Pass Rate:</b> {pass_rate}<br>"
+                                            f"<b>⏱️ Gen Time:</b> {gen_time} &nbsp;&nbsp; "
+                                            f"<b>🖼️ Screenshot:</b> {os.path.basename(evidence)}"
                                         )
                                     }
                                 }
@@ -176,16 +205,30 @@ def main() -> None:
     payload = build_payload(status, total, passed, failed, run_url, run_number, base_url)
     ok = send(webhook_url, payload)
 
-    # Send screenshot filenames as a follow-up message if there are failures
+    # Send screenshot follow-up (on FAIL or for TC_GEN_001 PASS)
     if failed > 0:
         shots = collect_screenshots()
         if shots:
             filenames = "\n".join(f"📸 {os.path.basename(s)}" for s in shots)
             followup = {
                 "text": (
-                    f"*Failed test screenshots* (download from Actions artifacts):\n"
+                    f"*Failed test screenshots* (view in Actions artifacts):\n"
                     f"{filenames}\n"
-                    f"<{run_url}|📎 Download artifacts>"
+                    f"<{run_url}|📎 View run & artifacts>"
+                )
+            }
+            send(webhook_url, followup)
+    elif passed > 0 and gen_details.get("TC_ID") == "TC_GEN_001":
+        # Specific pass report for TC_GEN_001
+        evidence = gen_details.get("Evidence")
+        if evidence and os.path.exists(evidence):
+            filename = os.path.basename(evidence)
+            followup = {
+                "text": (
+                    f"✅ *TC_GEN_001 Artwork Result*:\n"
+                    f"📸 `{filename}`\n"
+                    f"⏱️ Generation Time: `{gen_time}`\n"
+                    f"<{run_url}|📎 View evidence in artifacts>"
                 )
             }
             send(webhook_url, followup)

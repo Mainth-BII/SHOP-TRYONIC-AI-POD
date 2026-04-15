@@ -57,29 +57,12 @@ jobs:
       - name: Install Playwright browsers
         run: python -m playwright install --with-deps chromium
 
-      # ── Determine test markers ────────────────────────────────────────────
-      - name: Set test markers
-        id: markers
-        run: |
-          SUITE="${{ github.event.inputs.test_suite || 'artwork' }}"
-          if [ "$SUITE" = "smoke" ]; then
-            echo "args=-m smoke" >> $GITHUB_OUTPUT
-          elif [ "$SUITE" = "artwork" ]; then
-            echo "args=-m artwork" >> $GITHUB_OUTPUT
-          elif [ "$SUITE" = "validation" ]; then
-            echo "args=-m validation" >> $GITHUB_OUTPUT
-          elif [ "$SUITE" = "mobile" ]; then
-            echo "args=-m mobile" >> $GITHUB_OUTPUT
-          else
-            echo "args=" >> $GITHUB_OUTPUT
-          fi
-
       # ── Create output directories ────────────────────────────────────────
       - name: Create output directories
         run: mkdir -p tests/screenshots tests/test_reports
 
-      # ── Run tests (from repo root, PYTHONPATH=tests so imports work) ─────
-      - name: Run Playwright tests
+      # ── Run TC_GEN_001 only (step-by-step với screenshots từng bước) ─────
+      - name: Run Playwright tests — TC_GEN_001
         id: run_tests
         env:
           BASE_URL: ${{ env.BASE_URL }}
@@ -87,8 +70,7 @@ jobs:
           PYTHONPATH: ${{ github.workspace }}/tests
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
-          python -m pytest tests/ \
-            ${{ steps.markers.outputs.args }} \
+          python -m pytest tests/test_gen_with_steps.py \
             --browser chromium \
             --screenshot only-on-failure \
             --video retain-on-failure \

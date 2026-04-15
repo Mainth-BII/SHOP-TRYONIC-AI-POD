@@ -90,11 +90,9 @@ jobs:
           python -m pytest tests/ \
             ${{ steps.markers.outputs.args }} \
             --browser chromium \
-            --headless \
             --screenshot only-on-failure \
             --video retain-on-failure \
             --tracing retain-on-failure \
-            --timeout=150000 \
             -v \
             --tb=short \
             -p no:cacheprovider \

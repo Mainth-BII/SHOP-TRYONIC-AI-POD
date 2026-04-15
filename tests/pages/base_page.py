@@ -36,7 +36,7 @@ class BasePage:
         timestamp = datetime.now().strftime("%H%M%S")
         filename = f"{name}_{timestamp}.png"
         path = os.path.join(base_dir, filename)
-        self.page.screenshot(path=path, full_page=True)
+        self.page.screenshot(path=path, full_page=False)
         return path
 
     # ── Helpers ──────────────────────────────────────────────────────────────

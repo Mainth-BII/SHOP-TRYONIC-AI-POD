@@ -88,7 +88,8 @@ class TestArtworkGenerationSteps:
             }""")
 
             # ── Step 10: Screenshot cuối đầy đủ (DUY NHẤT) ────────────────────
-            page.wait_for_timeout(500)
+            artwork.scroll_into_view_if_needed()
+            page.wait_for_timeout(1000)
             final_shot = home.take_screenshot("TC_GEN_001_SUCCESS_FINAL", folder="TC_GEN_001")
             print(f"[PASS] Step 10: Final artwork screenshot captured: {final_shot}")
 

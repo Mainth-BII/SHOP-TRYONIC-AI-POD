@@ -123,6 +123,25 @@ def build_payload(
                         *(
                             [
                                 {
+                                    "header": "🎨 AI Impression",
+                                    "collapsible": True,
+                                    "widgets": [
+                                        {
+                                            "textParagraph": {
+                                                "text": (
+                                                    f"<b>Review:</b> {gen_details.get('Actual_Result', 'No feedback available')}"
+                                                )
+                                            }
+                                        }
+                                    ],
+                                }
+                            ]
+                            if "[GOOD]" in gen_details.get("Actual_Result", "") or "[REVIEW]" in gen_details.get("Actual_Result", "")
+                            else []
+                        ),
+                        *(
+                            [
+                                {
                                     "header": "Failure Summary",
                                     "collapsible": True,
                                     "widgets": [
@@ -136,7 +155,7 @@ def build_payload(
                                     ],
                                 }
                             ]
-                            if failed > 0 and gen_details.get("Actual_Result")
+                            if failed > 0 and "[REVIEW]" not in gen_details.get("Actual_Result", "") and "[GOOD]" not in gen_details.get("Actual_Result", "")
                             else []
                         ),
                         {

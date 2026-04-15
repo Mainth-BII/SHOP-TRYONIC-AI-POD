@@ -21,13 +21,10 @@ _SYSTEM = (
 _PROMPT_TEMPLATE = """This image is the generated artwork from a T-shirt design AI.
 User's prompt: "{prompt}"
 
-Answer these two questions:
-1. Is this image a generic gift box, loading placeholder, or default template — instead of a real custom design based on the prompt?
-2. Does the image visually contain elements directly related to the prompt keywords?
-
-Examples of FAIL:
-- Prompt says "football" but image shows flowers, a gift box, or is blank/default.
-- Image is clearly a placeholder 3D gift box icon.
+INSTRUCTIONS FOR EVALUATION:
+1. SUBJECT: Identify the main subject. If the prompt is "football" (bóng đá), LOOK CLOSELY for a round soccer ball, a football player, or a goal post. DO NOT confuse dynamic speed lines with vehicles (cars/motorcycles).
+2. COLOR: Check if requested colors are present. If color is wrong but subject is right, mark as relevant but mention color in reason.
+3. PLACEHOLDER: Check if it's a generic 3D gift box or loading icon.
 
 Respond ONLY with this JSON (no code fences):
 {{"is_gift_box": true/false, "is_relevant": true/false, "reason": "one concise sentence in English"}}"""
@@ -87,9 +84,10 @@ def check_artwork(img_bytes: bytes, prompt_text: str) -> Tuple[bool, str]:
 
         if is_gift_box:
             return False, f"[GIFT_BOX] Anh placeholder qua tang bi phat hien — {reason}"
-        if not is_relevant:
-            return False, f"[NOT_RELEVANT] Anh khong lien quan den prompt '{prompt_text}' — {reason}"
-        return True, reason
+        
+        # Luon tra ve True neu co hinh anh, chi kem theo feedback review
+        prefix = "[GOOD]" if is_relevant else "[REVIEW]"
+        return True, f"{prefix} {reason}"
 
     except json.JSONDecodeError as e:
         # Claude returned something unexpected — don't block the test

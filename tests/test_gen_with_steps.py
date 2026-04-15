@@ -87,9 +87,11 @@ class TestArtworkGenerationSteps:
                 return real ? { w: real.naturalWidth, h: real.naturalHeight } : null;
             }""")
 
-            # ── Step 10: Screenshot cuối đầy đủ (DUY NHẤT) ────────────────────
+            # ── Step 10: Screenshot cuối đầy đủ ────────────────────────────
+            print(f"DEBUG: Current URL before final screenshot: {page.url}")
+            page.wait_for_load_state("networkidle")
             artwork.scroll_into_view_if_needed()
-            page.wait_for_timeout(1000)
+            page.wait_for_timeout(2000)
             final_shot = home.take_screenshot("TC_GEN_001_SUCCESS_FINAL", folder="TC_GEN_001")
             print(f"[PASS] Step 10: Final artwork screenshot captured: {final_shot}")
 

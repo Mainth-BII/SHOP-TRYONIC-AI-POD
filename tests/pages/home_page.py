@@ -23,29 +23,32 @@ class HomePage(BasePage):
         # ── Root wrapper ────────────────────────────────────────────────────
         self.root = page.locator("#root")
 
-        # ── Prompt / story input ────────────────────────────────────────────
-        # Try common patterns: textarea, or input with common Vietnamese placeholders
+        # ── Drag handle (slide-to-unlock on landing page) ───────────────────
+        self._drag_handle = page.locator('.cursor-grab').first
+        self._drag_container = page.locator('.cursor-pointer.overflow-hidden.rounded-full').first
+
+        # ── Prompt textarea (visible after drag) ────────────────────────────
         self._prompt_selectors = [
+            'textarea[placeholder*="chuy"]',   # "Câu chuyện của mình......"
             'textarea',
             'input[type="text"]',
+            '[contenteditable="true"]',
+            '[role="textbox"]',
             '[placeholder*="câu chuyện"]',
+            '[placeholder*="chuyện"]',
             '[placeholder*="story"]',
             '[placeholder*="mô tả"]',
-            '[placeholder*="describe"]',
             '[placeholder*="nhập"]',
-            '[data-testid*="prompt"]',
-            '[data-testid*="input"]',
+            '[placeholder*="Nhập"]',
         ]
 
-        # ── Generate / submit button ─────────────────────────────────────────
+        # ── Generate button (visible after drag) ─────────────────────────────
         self._generate_btn_selectors = [
-            'button[type="submit"]',
+            'button:has-text("Tạo chiếc áo")',
+            'button:has-text("Tạo chiếc")',
             'button:has-text("Tạo")',
-            'button:has-text("Thiết kế")',
+            'button[type="submit"]',
             'button:has-text("Generate")',
-            'button:has-text("Tạo thiết kế")',
-            'button:has-text("Bắt đầu")',
-            'button:has-text("Tạo ngay")',
             '[data-testid*="generate"]',
             '[data-testid*="submit"]',
         ]
@@ -92,6 +95,34 @@ class HomePage(BasePage):
 
     def goto(self) -> None:
         self.navigate()
+
+    def open_story_box(self) -> None:
+        """Drag the slide-to-unlock handle to reveal the story input form."""
+        self._drag_handle.wait_for(state="visible", timeout=10_000)
+        handle_box = self._drag_handle.bounding_box()
+        container_box = self._drag_container.bounding_box()
+        if not handle_box or not container_box:
+            raise RuntimeError("Could not find drag handle or container bounding box")
+
+        start_x = handle_box["x"] + handle_box["width"] / 2
+        start_y = handle_box["y"] + handle_box["height"] / 2
+        end_x   = container_box["x"] + container_box["width"] - 30
+
+        self.page.mouse.move(start_x, start_y)
+        self.page.mouse.down()
+        steps = 20
+        for i in range(1, steps + 1):
+            self.page.mouse.move(
+                start_x + (end_x - start_x) * i / steps,
+                start_y,
+            )
+            self.page.wait_for_timeout(30)
+        self.page.mouse.up()
+        # Wait for story form to appear
+        self.page.wait_for_function(
+            "() => !!document.querySelector('textarea')",
+            timeout=8_000,
+        )
 
     def get_prompt_input(self) -> Locator:
         """Return the first visible prompt input locator."""
@@ -153,16 +184,45 @@ class HomePage(BasePage):
         btn.wait_for(state="visible", timeout=10_000)
         btn.click()
 
+    # Known static asset paths that must NOT be counted as generated artwork
+    _STATIC_ASSET_PATTERNS = ("/assets/POD-", "/assets/gift-box-", "/favicon")
+
+    def handle_email_gate(self, email: str = "mainth@bccii.co.jp") -> bool:
+        """
+        If the email gate modal is visible, fill in the email and submit.
+        Returns True if gate was handled, False if gate not present.
+        """
+        email_input = self.page.locator('input[type="email"], input[placeholder*="email"]').first
+        try:
+            email_input.wait_for(state="visible", timeout=5_000)
+        except Exception:
+            return False  # No gate visible
+
+        email_input.fill(email)
+        submit_btn = self.page.locator('button:has-text("Gui"), button:has-text("Gửi"), button[type="submit"]').first
+        submit_btn.wait_for(state="visible", timeout=5_000)
+        submit_btn.click()
+        # Wait for gate to disappear
+        try:
+            email_input.wait_for(state="hidden", timeout=10_000)
+        except Exception:
+            pass
+        return True
+
     def wait_for_artwork(self) -> Locator:
         """
-        Wait until artwork image is visible after generation.
+        Wait until the AI-generated artwork image is visible.
 
         Strategy:
-          1. Wait for any loading indicator to disappear.
-          2. Poll for an <img> with non-empty src to appear.
-          3. Assert it is visible in viewport.
+          1. Handle email gate if present.
+          2. Wait for loading indicator to disappear.
+          3. Poll for a NEW <img> whose src is NOT a known static asset.
+          4. Return that locator.
         """
-        # Step 1 — wait for loading to clear
+        # Step 1 — handle email gate
+        self.handle_email_gate()
+
+        # Step 2 — wait for loading to clear
         for sel in self._loading_selectors:
             loc = self.page.locator(sel).first
             if loc.count() > 0:
@@ -172,27 +232,29 @@ class HomePage(BasePage):
                 except Exception:
                     continue
 
-        # Step 2 — wait for an img with a real src to appear
+        # Step 3 — wait for a non-static img to appear (patterns embedded in JS)
         self.page.wait_for_function(
             """() => {
+                const STATIC = ["/assets/POD-", "/assets/gift-box-", "/favicon"];
                 const imgs = document.querySelectorAll('img');
-                return Array.from(imgs).some(img =>
-                    img.src &&
-                    img.src !== '' &&
-                    !img.src.endsWith('.svg') &&
-                    img.naturalWidth > 0
-                );
+                return Array.from(imgs).some(img => {
+                    if (!img.src || img.src.endsWith('.svg')) return false;
+                    if (img.naturalWidth === 0) return false;
+                    return !STATIC.some(p => img.src.includes(p));
+                });
             }""",
             timeout=self.ARTWORK_TIMEOUT_MS,
         )
 
-        # Step 3 — return the first qualifying img
-        artwork = self.get_artwork_image()
-        expect(artwork).to_be_visible()
-        return artwork
+        # Step 4 — return first qualifying generated image
+        generated = self.page.locator("img").filter(
+            has_not=self.page.locator('img[src*="/assets/POD-"]')
+        ).first
+        expect(generated).to_be_visible()
+        return generated
 
     def generate_artwork(self, prompt_text: str) -> Locator:
-        """Full end-to-end: enter prompt → click generate → wait for result."""
+        """Full end-to-end: enter prompt → click generate → email gate → wait for artwork."""
         self.enter_prompt(prompt_text)
         self.click_generate()
         return self.wait_for_artwork()
@@ -210,12 +272,8 @@ class HomePage(BasePage):
 
     def assert_artwork_has_dimensions(self, artwork: Locator) -> None:
         """Assert the artwork image has non-zero natural dimensions."""
-        has_dims = self.page.evaluate(
-            """(selector) => {
-                const img = document.querySelector(selector);
-                return img ? (img.naturalWidth > 0 && img.naturalHeight > 0) : false;
-            }""",
-            "img",
+        has_dims = artwork.evaluate(
+            "img => img.naturalWidth > 0 && img.naturalHeight > 0"
         )
         assert has_dims, "Artwork image has zero dimensions (likely broken/missing)"
 

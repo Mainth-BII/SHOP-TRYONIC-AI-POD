@@ -2,7 +2,6 @@
 
 import os
 import pytest
-from datetime import datetime
 from playwright.sync_api import Browser, BrowserContext, Page
 
 from utils.report_writer import ReportWriter
@@ -27,14 +26,17 @@ def report() -> ReportWriter:
 # ── Base URL ─────────────────────────────────────────────────────────────────
 
 @pytest.fixture(scope="session")
-def base_url() -> str:
-    return BASE_URL
+def base_url(request) -> str:
+    # pytest-playwright also provides base_url from --base-url flag.
+    # Fall back to our constant if not supplied via CLI.
+    cli_val = request.config.getoption("--base-url", default=None)
+    return cli_val or BASE_URL
 
 
 # ── Browser context — desktop ────────────────────────────────────────────────
 
 @pytest.fixture(scope="function")
-def page(browser: Browser, base_url: str) -> Page:
+def page(browser: Browser) -> Page:
     context: BrowserContext = browser.new_context(
         locale="vi-VN",
         timezone_id="Asia/Ho_Chi_Minh",
@@ -85,7 +87,7 @@ def tablet_page(browser: Browser) -> Page:
 
 # ── pytest-playwright options ────────────────────────────────────────────────
 
-def pytest_configure(config):
+def pytest_configure(config):  # noqa: ARG001
     """Ensure screenshots folder exists."""
     os.makedirs("screenshots", exist_ok=True)
     os.makedirs("test_reports", exist_ok=True)

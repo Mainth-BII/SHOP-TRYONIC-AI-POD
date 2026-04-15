@@ -4,7 +4,7 @@ on:
   # ── 2x daily: 01:00 UTC (08:00 ICT) and 13:00 UTC (20:00 ICT) ─────────────
   schedule:
     - cron: "0 1 * * *"   # 08:00 ICT (UTC+7)
-    - cron: "0 13 * * *"  # 20:00 ICT (UTC+7)
+    - cron: "0 9 * * *"   # 16:00 ICT (UTC+7)
 
   # ── Manual trigger ──────────────────────────────────────────────────────────
   workflow_dispatch:

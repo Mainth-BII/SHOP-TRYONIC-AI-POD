@@ -26,7 +26,7 @@ class BasePage:
     def take_screenshot(self, name: str, folder: str = "") -> str:
         """Capture screenshot under screenshots/DD-MM-YYYY/Lan_N/[folder]/."""
         import pages.base_page as _m
-        parts = ["screenshots"]
+        parts = ["tests/screenshots"]
         if _m.SESSION_RUN_DIR:
             parts.append(_m.SESSION_RUN_DIR)
         if folder:

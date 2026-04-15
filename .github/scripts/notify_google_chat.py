@@ -51,6 +51,7 @@ def build_payload(
     run_url: str,
     run_number: str,
     base_url: str,
+    gen_details: dict,
 ) -> dict:
     now = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
     pass_rate = f"{(passed / total * 100):.0f}%" if total > 0 else "N/A"
@@ -66,8 +67,7 @@ def build_payload(
         header_icon = "❌"
         status_text = f"{failed} TEST(S) FAILED"
 
-    # Try to get TC_GEN_001 specific details
-    gen_details = _parse_csv_report()
+    # Process details passed from main
     gen_time = gen_details.get("Generation_Time", "N/A")
     evidence = gen_details.get("Evidence", "None")
 
@@ -227,7 +227,11 @@ def main() -> None:
     run_number = get_env("RUN_NUMBER", "?")
     base_url = get_env("BASE_URL", "https://pre-launch.tryonic.ai")
 
-    payload = build_payload(status, total, passed, failed, run_url, run_number, base_url)
+    # Get TC_GEN_001 specific details first
+    gen_details = _parse_csv_report()
+    gen_time = gen_details.get("Generation_Time", "N/A")
+
+    payload = build_payload(status, total, passed, failed, run_url, run_number, base_url, gen_details)
     ok = send(webhook_url, payload)
 
     # Send screenshot follow-up (on FAIL or for TC_GEN_001 PASS)

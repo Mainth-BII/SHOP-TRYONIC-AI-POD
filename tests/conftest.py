@@ -11,6 +11,8 @@ from utils.report_writer import ReportWriter
 # ── Constants ────────────────────────────────────────────────────────────────
 
 BASE_URL = os.getenv("BASE_URL", "https://pre-launch.tryonic.ai")
+REPORT_DIR = "tests/test_reports"
+SCREENSHOT_DIR = "tests/screenshots"
 HEADLESS = os.getenv("CI", "false").lower() in ("1", "true", "yes")
 
 # ── Screenshot run directory ─────────────────────────────────────────────────
@@ -24,7 +26,7 @@ def _setup_run_dir() -> None:
     Lần 1 = first run of the day (08:00), Lần 2 = second run (16:00).
     """
     date_str = datetime.now().strftime("%d-%m-%Y")
-    date_folder = os.path.join("screenshots", date_str)
+    date_folder = os.path.join(SCREENSHOT_DIR, date_str)
     os.makedirs(date_folder, exist_ok=True)
 
     existing = [
@@ -33,15 +35,15 @@ def _setup_run_dir() -> None:
     ]
     run_num = len(existing) + 1
     run_dir = os.path.join(date_str, f"Lan_{run_num}")
-    os.makedirs(os.path.join("screenshots", run_dir), exist_ok=True)
+    os.makedirs(os.path.join(SCREENSHOT_DIR, run_dir), exist_ok=True)
 
     _base_page.SESSION_RUN_DIR = run_dir
-    print(f"\n[INFO] Screenshots: screenshots/{run_dir}/")
+    print(f"\n[INFO] Screenshots: {SCREENSHOT_DIR}/{run_dir}/")
 
 
 # ── Session-scoped report ────────────────────────────────────────────────────
 
-_report = ReportWriter(output_dir="test_reports")
+_report = ReportWriter(output_dir=REPORT_DIR)
 
 
 @pytest.fixture(scope="session")
@@ -69,7 +71,7 @@ def page(browser: Browser) -> Page:
         locale="vi-VN",
         timezone_id="Asia/Ho_Chi_Minh",
         viewport={"width": 1440, "height": 900},
-        record_video_dir="test_reports/videos" if not HEADLESS else None,
+        record_video_dir=f"{REPORT_DIR}/videos" if not HEADLESS else None,
     )
     context.set_default_timeout(30_000)
     pg = context.new_page()
@@ -134,4 +136,6 @@ def android_page(browser: Browser) -> Page:
 def pytest_configure(config):  # noqa: ARG001
     """Ensure screenshots folder exists."""
     os.makedirs("screenshots", exist_ok=True)
-    os.makedirs("test_reports", exist_ok=True)
+    # Ensure standard dirs exist
+    os.makedirs("tests/test_reports", exist_ok=True)
+    os.makedirs("tests/screenshots", exist_ok=True)

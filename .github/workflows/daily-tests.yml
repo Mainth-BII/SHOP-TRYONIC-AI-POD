@@ -31,6 +31,8 @@ on:
 
 env:
   BASE_URL: "https://pre-launch.tryonic.ai"
+  REPORT_DIR: "tests/test_reports"
+  SCREENSHOT_DIR: "tests/screenshots"
 
 jobs:
   test:

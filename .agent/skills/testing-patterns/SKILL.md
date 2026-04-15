@@ -175,4 +175,20 @@ allowed-tools: Read, Write, Edit, Glob, Grep, Bash
 
 ---
 
+## 11. Test Case Document (Excel) Updates
+
+When updating the main QA Test Case Excel file (Execution Summary) based on review feedback, you MUST follow these automated reporting rules:
+
+### Changelog Column Rule
+| Requirement | Action |
+|-------------|--------|
+| **Dedicated Column** | Always add a `Changelog` (or `v[X]_Changelog`) column at the end of the sheet. |
+| **Clear Description** | Write exactly what changed in the Changelog column (e.g., "Updated Expected Result: minus 3 credits", "Split to Mobile case", "Deleted obsolete step"). |
+| **Visual Highlighting** | Apply a background fill to modified rows: <br> - **Light Yellow** (`FFF2CC`) for modified/updated cases. <br> - **Light Green** (`E2EFDA`) for newly added/split cases. |
+| **Clean Up** | Clear the old `Review_Manual (Feedback)` text to mark it as resolved. |
+
+> **Why?** It prevents QA from having to manually scan 600+ test cases to find the 10-20 modifications.
+
+---
+
 > **Remember:** Tests are documentation. If someone can't understand what the code does from the tests, rewrite them.

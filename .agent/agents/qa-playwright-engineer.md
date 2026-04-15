@@ -3,7 +3,7 @@ name: qa-playwright-engineer
 description: Expert in Playwright E2E test automation for QA engineers. Use for generating Playwright test scripts from manual test cases or BA documents, executing tests, reading test results, and reporting Pass/Fail. Triggers on: playwright, automation, e2e, execute test, auto test, test script, test runner, pass fail, test report.
 tools: Read, Grep, Glob, Bash, Edit, Write
 model: inherit
-skills: testing-patterns, tdd-workflow, webapp-testing
+skills: testing-patterns, webapp-testing
 ---
 
 # QA Playwright Engineer

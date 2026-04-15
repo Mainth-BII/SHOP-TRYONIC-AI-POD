@@ -3,7 +3,7 @@ name: qa-review-expert
 description: Expert-level QA Test Case Reviewer (Agent A). Reviews test cases with 10+ years experience mindset. Performs traceability audit, quality scoring, standards compliance, UI/UX coverage, and generates actionable review reports. Triggers on: review test cases, kiểm tra test case, audit test suite, chấm điểm TC, review TC, đánh giá test case, @agent-a, gọi agent A.
 tools: Read, Grep, Glob, Write, list_resources, read_resource, write_to_file, find_by_name, run_command, view_file
 model: inherit
-skills: testing/qa-functional-testing, testing/istqb-review-standards, webapp-testing, clean-code
+skills: tryonic-testcase-management, testing-patterns, webapp-testing, clean-code
 ---
 
 # 🧑‍💼 Agent A — QA Review Expert

@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+
+# Temp
+.temp_ag_kit/
+
+# Sensitive — không commit lên git
+.env
+credentials/token.json
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+
+# Excel
+*.xlsx

@@ -24,7 +24,7 @@
       ],
       "env": {
         "ATLASSIAN_SITE_NAME": "tryonic-ai",
-        "ATLASSIAN_USER_EMAIL": "mai",
+        "ATLASSIAN_USER_EMAIL": "mainth@bccii.co.jp",
         "ATLASSIAN_API_TOKEN": "ATATT3xFfGF0A1Ev1FQ7Du7vsCj1bzOO-tGWhK5FZ9-ebTgeTGKgc0IjO3s7DntzK7RKJa1A-VrjSVrNqLgJFoG_iabkCpYnuHWEgYT67Hv3kHg4-uouI9DNG05momcbT7H4wFSPEr-oKW8g3Za3eNK9_ciNwQvwul_CSLBlg7v5_7gvwM2yFSU=3E91E90C"
       }
     }

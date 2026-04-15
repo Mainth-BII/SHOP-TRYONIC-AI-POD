@@ -1,0 +1,167 @@
+name: Tryonic AI — Daily Automated Tests
+
+on:
+  # ── 2x daily: 01:00 UTC (08:00 ICT) and 13:00 UTC (20:00 ICT) ─────────────
+  schedule:
+    - cron: "0 1 * * *"   # 08:00 ICT (UTC+7)
+    - cron: "0 13 * * *"  # 20:00 ICT (UTC+7)
+
+  # ── Manual trigger ──────────────────────────────────────────────────────────
+  workflow_dispatch:
+    inputs:
+      test_suite:
+        description: "Test suite to run"
+        required: false
+        default: "all"
+        type: choice
+        options:
+          - all
+          - smoke
+          - artwork
+          - validation
+          - mobile
+      headless:
+        description: "Run headless (no visible browser)"
+        required: false
+        default: "true"
+        type: boolean
+
+  # ── Run on push to main for verification ───────────────────────────────────
+  push:
+    branches: [lauch_tryonic_ai]
+    paths:
+      - "tests/**"
+      - "requirements.txt"
+      - ".github/workflows/daily-tests.yml"
+
+env:
+  BASE_URL: "https://pre-launch.tryonic.ai"
+  CI: "true"
+  PYTHONPATH: "tests"
+
+jobs:
+  test:
+    name: Playwright Tests — ${{ github.event.inputs.test_suite || 'all' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      # ── Checkout ─────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── Python setup ─────────────────────────────────────────────────────
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      # ── Install Python dependencies ───────────────────────────────────────
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      # ── Install Playwright browsers ───────────────────────────────────────
+      - name: Install Playwright browsers
+        run: python -m playwright install --with-deps chromium
+
+      # ── Determine test markers ────────────────────────────────────────────
+      - name: Set test markers
+        id: markers
+        run: |
+          SUITE="${{ github.event.inputs.test_suite || 'all' }}"
+          if [ "$SUITE" = "smoke" ]; then
+            echo "args=-m smoke" >> $GITHUB_OUTPUT
+          elif [ "$SUITE" = "artwork" ]; then
+            echo "args=-m artwork" >> $GITHUB_OUTPUT
+          elif [ "$SUITE" = "validation" ]; then
+            echo "args=-m validation" >> $GITHUB_OUTPUT
+          elif [ "$SUITE" = "mobile" ]; then
+            echo "args=-m mobile" >> $GITHUB_OUTPUT
+          else
+            echo "args=" >> $GITHUB_OUTPUT
+          fi
+
+      # ── Create directories ───────────────────────────────────────────────
+      - name: Create output directories
+        run: |
+          mkdir -p tests/screenshots tests/test_reports
+
+      # ── Run tests ────────────────────────────────────────────────────────
+      - name: Run Playwright tests
+        id: run_tests
+        working-directory: tests
+        env:
+          BASE_URL: ${{ env.BASE_URL }}
+          CI: "true"
+        run: |
+          python -m pytest \
+            ${{ steps.markers.outputs.args }} \
+            --browser chromium \
+            --headless \
+            --screenshot only-on-failure \
+            --video retain-on-failure \
+            --tracing retain-on-failure \
+            --timeout=150000 \
+            -v \
+            --tb=short \
+            --junit-xml=test_reports/junit.xml \
+            2>&1 | tee test_reports/test_output.txt
+          echo "exit_code=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
+        continue-on-error: true
+
+      # ── Determine run status ──────────────────────────────────────────────
+      - name: Parse test results
+        id: results
+        working-directory: tests
+        run: |
+          if [ -f test_reports/junit.xml ]; then
+            TOTAL=$(grep -oP 'tests="\K[0-9]+' test_reports/junit.xml | head -1 || echo "0")
+            FAILED=$(grep -oP 'failures="\K[0-9]+' test_reports/junit.xml | head -1 || echo "0")
+            ERRORS=$(grep -oP 'errors="\K[0-9]+' test_reports/junit.xml | head -1 || echo "0")
+            PASSED=$((TOTAL - FAILED - ERRORS))
+            echo "total=$TOTAL" >> $GITHUB_OUTPUT
+            echo "passed=$PASSED" >> $GITHUB_OUTPUT
+            echo "failed=$((FAILED + ERRORS))" >> $GITHUB_OUTPUT
+            if [ "$FAILED" -gt 0 ] || [ "$ERRORS" -gt 0 ]; then
+              echo "status=FAIL" >> $GITHUB_OUTPUT
+            else
+              echo "status=PASS" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "total=0" >> $GITHUB_OUTPUT
+            echo "passed=0" >> $GITHUB_OUTPUT
+            echo "failed=0" >> $GITHUB_OUTPUT
+            echo "status=ERROR" >> $GITHUB_OUTPUT
+          fi
+
+      # ── Upload test artifacts ─────────────────────────────────────────────
+      - name: Upload test reports and screenshots
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-${{ github.run_number }}
+          path: |
+            tests/test_reports/
+            tests/screenshots/
+          retention-days: 14
+
+      # ── Send Google Chat notification ─────────────────────────────────────
+      - name: Notify Google Chat [Tryonic_notify]
+        if: always()
+        env:
+          GOOGLE_CHAT_WEBHOOK_URL: ${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}
+          STATUS: ${{ steps.results.outputs.status }}
+          TOTAL: ${{ steps.results.outputs.total }}
+          PASSED: ${{ steps.results.outputs.passed }}
+          FAILED: ${{ steps.results.outputs.failed }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          RUN_NUMBER: ${{ github.run_number }}
+        run: python .github/scripts/notify_google_chat.py
+
+      # ── Fail the job if tests failed ──────────────────────────────────────
+      - name: Fail job if tests failed
+        if: steps.results.outputs.status != 'PASS'
+        run: |
+          echo "Tests failed: ${{ steps.results.outputs.failed }} failures out of ${{ steps.results.outputs.total }}"
+          exit 1

@@ -246,15 +246,28 @@ class HomePage(BasePage):
             timeout=self.ARTWORK_TIMEOUT_MS,
         )
 
-        # Step 4 — return first qualifying generated image
-        generated = self.page.locator("img").filter(
-            has_not=self.page.locator('img[src*="/assets/POD-"]')
-        ).first
+        # Step 4 — dùng JS tìm index của ảnh hợp lệ, rồi dùng .nth() để lấy locator
+        # (filter has_not không hoạt động để lọc thuộc tính src của cùng loại phần tử)
+        gen_index = self.page.evaluate("""() => {
+            const STATIC = ["/assets/POD-", "/assets/gift-box-", "/favicon"];
+            const imgs = Array.from(document.querySelectorAll('img'));
+            return imgs.findIndex(img => {
+                if (!img.src || img.src.endsWith('.svg')) return false;
+                if (img.naturalWidth === 0) return false;
+                return !STATIC.some(p => img.src.includes(p));
+            });
+        }""")
+        generated = self.page.locator("img").nth(gen_index if gen_index >= 0 else 0)
         expect(generated).to_be_visible()
         return generated
 
     def generate_artwork(self, prompt_text: str) -> Locator:
-        """Full end-to-end: enter prompt → click generate → email gate → wait for artwork."""
+        """Full end-to-end: open story box → enter prompt → click generate → wait for artwork."""
+        # Mở story box nếu textarea chưa visible (trang yêu cầu drag slider trước)
+        try:
+            self.page.locator("textarea").first.wait_for(state="visible", timeout=2_000)
+        except Exception:
+            self.open_story_box()
         self.enter_prompt(prompt_text)
         self.click_generate()
         return self.wait_for_artwork()

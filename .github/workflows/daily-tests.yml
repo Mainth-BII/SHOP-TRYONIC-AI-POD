@@ -149,6 +149,7 @@ jobs:
       # ── Send Google Chat notification ─────────────────────────────────────
       - name: Notify Google Chat [Tryonic_notify]
         if: always()
+        continue-on-error: true
         env:
           GOOGLE_CHAT_WEBHOOK_URL: ${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}
           STATUS: ${{ steps.results.outputs.status }}

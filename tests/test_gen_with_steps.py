@@ -10,7 +10,20 @@ from playwright.sync_api import Page, expect
 from pages.home_page import HomePage
 from utils.report_writer import ReportWriter
 
-PROMPT_VI = "Tôi yêu bóng đá và màu xanh lá — tạo cho tôi một thiết kế thể thao"
+import random
+
+PROMPTS = [
+    "Thiết kế phong cách Cyberpunk, một vận động viên trượt ván dưới ánh đèn neon rực rỡ",
+    "Phong cách tối giản: Chân dung một cô gái đeo tai nghe hiện đại, đường nét thanh lịch",
+    "Nghệ thuật Graffiti đường phố: Hình ảnh chó bull đeo kính râm cực ngầu và Hip-hop",
+    "Phong cách Cinematic: Một ly cà phê bốc khói trên bàn làm việc của một startup công nghệ",
+    "Thiết kế trẻ trung: Những khối màu trừu tượng kết hợp với biểu tượng mạng xã hội hiện đại",
+    "Phong cách đời thực: Một buổi chiều hoàng hôn trên sân thượng thành phố với nhóm bạn trẻ",
+    "Vẽ nét mảnh (Fine line): Hình ảnh phi hành gia đang chơi guitar giữa không gian vũ trụ",
+    "Phong cách Pop-art: Một quả lăng trụ rực rỡ màu sắc đại diện cho sự năng động của giới trẻ",
+    "Thiết kế Typography: Chữ 'GEN Z' cách điệu kết hợp với các họa tiết hình học năng động",
+    "Phong cách Manga hiện đại: Một nhân vật anime đang chạy marathon trong trang phục thể thao techwear"
+]
 
 
 @pytest.mark.artwork
@@ -30,7 +43,11 @@ class TestArtworkGenerationSteps:
         """
         tc_id = "TC_GEN_001"
         home = HomePage(page, base_url)
-        screenshots = []
+        
+        # Chon Prompt ngau nhien cho moi lan chay
+        selected_prompt = random.choice(PROMPTS)
+        print(f"\n[INFO] Selected Prompt for this run: {selected_prompt}")
+        
         start_time = time.time()
 
         try:
@@ -48,8 +65,8 @@ class TestArtworkGenerationSteps:
             print(f"[PASS] Step 3: Textarea visible")
 
             # ── Step 4: Nhập prompt ───────────────────────────────────────────
-            home.enter_prompt(PROMPT_VI)
-            print(f"[PASS] Step 4: Nhap prompt xong")
+            home.enter_prompt(selected_prompt)
+            print(f"[PASS] Step 4: Nhap prompt '{selected_prompt}' xong")
 
             # ── Step 5: Kiểm tra button, click Generate ───────────────────────
             btn = home.get_generate_button()
@@ -71,10 +88,10 @@ class TestArtworkGenerationSteps:
             elapsed = time.time() - start_time
             print(f"[PASS] Step 7: Artwork xuat hien sau {elapsed:.1f}s")
 
-            # ── Step 8: Kiểm tra nội dung ảnh (gift box / relevance) ─────────
+            # ── Step 8: Kiểm tra nội dung ảnh (gift box / review) ─────────────
             print(f"[WAIT] Step 8: Dang kiem tra noi dung anh bang AI Vision...")
-            _, vision_reason = home.assert_artwork_relevance(artwork, PROMPT_VI)
-            print(f"[PASS] Step 8: Vision check OK - {vision_reason}")
+            _, vision_reason = home.assert_artwork_relevance(artwork, selected_prompt)
+            print(f"[PASS] Step 8: Vision check finished - {vision_reason}")
 
             # ── Step 9: Kiểm tra dimensions + viewport ────────────────────────
             artwork.scroll_into_view_if_needed()
@@ -99,9 +116,9 @@ class TestArtworkGenerationSteps:
             report.add(
                 tc_id, "PASS",
                 screen="HomePage", module="ArtworkGeneration",
-                title="Generate artwork — Vietnamese prompt",
+                title=f"Generate: {selected_prompt}",
                 priority="P0",
-                actual=f"Artwork OK. Vision: {vision_reason}. Dims: {dims}",
+                actual=f"Artwork OK. Vision: {vision_reason}. Kích thước: {{'Rộng': {dims['w']}, 'Cao': {dims['h']}}}",
                 gen_time=f"{elapsed:.1f}s",
                 screenshot=final_shot,
             )

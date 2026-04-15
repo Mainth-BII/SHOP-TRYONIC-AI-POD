@@ -101,7 +101,7 @@ def build_payload(
                                             f"<b>❌ Failed:</b> {failed} &nbsp;&nbsp; "
                                             f"<b>Pass Rate:</b> {pass_rate}<br>"
                                             f"<b>⏱️ Gen Time:</b> {gen_time} &nbsp;&nbsp; "
-                                            f"<b>🖼️ Screenshot:</b> {os.path.basename(evidence)}"
+                                            f"<b>🖼️ Screenshot:</b> <a href=\"{run_url}\">{os.path.basename(evidence)}</a>"
                                         )
                                     }
                                 }

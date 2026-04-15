@@ -37,9 +37,9 @@ class TestArtworkGeneration:
         """Generate artwork with valid Vietnamese prompt (P0 — core flow)."""
         tc_id = "TC_GEN_001"
         home = HomePage(page, base_url)
+        start = time.time()
         try:
             home.goto()
-            start = time.time()
             artwork = home.generate_artwork(PROMPT_VI)
             elapsed = time.time() - start
 
@@ -52,7 +52,8 @@ class TestArtworkGeneration:
                 screen="HomePage", module="ArtworkGeneration",
                 title="Generate artwork — Vietnamese prompt",
                 priority="P0",
-                actual=f"Artwork visible in {elapsed:.1f}s",
+                actual="Artwork visible",
+                gen_time=f"{elapsed:.1f}s",
                 screenshot=shot,
             )
         except Exception as exc:
@@ -60,7 +61,9 @@ class TestArtworkGeneration:
             report.add(tc_id, "FAIL",
                        screen="HomePage", module="ArtworkGeneration",
                        title="Generate artwork — Vietnamese prompt",
-                       priority="P0", actual=str(exc), screenshot=shot,
+                       priority="P0", actual=str(exc),
+                       gen_time=f"{time.time() - start:.1f}s",
+                       screenshot=shot,
                        bug_id="BUG-GEN-001",
                        bug_desc=f"[What] Artwork did not appear after Vietnamese prompt.\n"
                                 f"[Expected] Image visible within 120s.\n"
@@ -76,22 +79,27 @@ class TestArtworkGeneration:
         """Generate artwork with valid English prompt."""
         tc_id = "TC_GEN_002"
         home = HomePage(page, base_url)
+        start = time.time()
         try:
             home.goto()
             artwork = home.generate_artwork(PROMPT_EN)
+            elapsed = time.time() - start
             home.assert_artwork_visible(artwork)
 
             shot = home.take_screenshot(f"{tc_id}_PASS", folder="ArtworkGeneration")
             report.add(tc_id, "PASS",
                        screen="HomePage", module="ArtworkGeneration",
                        title="Generate artwork — English prompt",
-                       priority="P1", actual="Artwork visible", screenshot=shot)
+                       priority="P1", actual="Artwork visible",
+                       gen_time=f"{elapsed:.1f}s", screenshot=shot)
         except Exception as exc:
             shot = home.take_screenshot(f"{tc_id}_FAIL", folder="ArtworkGeneration")
             report.add(tc_id, "FAIL",
                        screen="HomePage", module="ArtworkGeneration",
                        title="Generate artwork — English prompt",
-                       priority="P1", actual=str(exc), screenshot=shot,
+                       priority="P1", actual=str(exc),
+                       gen_time=f"{time.time() - start:.1f}s",
+                       screenshot=shot,
                        bug_id="BUG-GEN-002", bug_desc=str(exc))
             raise
 
@@ -357,9 +365,9 @@ class TestArtworkGeneration:
         """Artwork generation completes within 120 seconds SLA."""
         tc_id = "TC_GEN_009"
         home = HomePage(page, base_url)
+        start = time.time()
         try:
             home.goto()
-            start = time.time()
             home.generate_artwork(PROMPT_VI)
             elapsed = time.time() - start
 
@@ -369,14 +377,17 @@ class TestArtworkGeneration:
             report.add(tc_id, "PASS",
                        screen="HomePage", module="ArtworkGeneration",
                        title="Generation completes <120s",
-                       priority="P0", actual=f"Completed in {elapsed:.1f}s",
+                       priority="P0", actual="Within SLA",
+                       gen_time=f"{elapsed:.1f}s",
                        screenshot=shot)
         except AssertionError as exc:
             shot = home.take_screenshot(f"{tc_id}_FAIL", folder="ArtworkGeneration")
             report.add(tc_id, "FAIL",
                        screen="HomePage", module="ArtworkGeneration",
                        title="Generation completes <120s",
-                       priority="P0", actual=str(exc), screenshot=shot,
+                       priority="P0", actual=str(exc),
+                       gen_time=f"{time.time() - start:.1f}s",
+                       screenshot=shot,
                        bug_id="BUG-GEN-009",
                        bug_desc=f"[What] Artwork generation exceeded 120s SLA.\n"
                                 f"[Expected] Image appears within 120 seconds.\n"
@@ -387,7 +398,9 @@ class TestArtworkGeneration:
             report.add(tc_id, "FAIL",
                        screen="HomePage", module="ArtworkGeneration",
                        title="Generation completes <120s",
-                       priority="P0", actual=str(exc), screenshot=shot,
+                       priority="P0", actual=str(exc),
+                       gen_time=f"{time.time() - start:.1f}s",
+                       screenshot=shot,
                        bug_id="BUG-GEN-009", bug_desc=str(exc))
             raise
 

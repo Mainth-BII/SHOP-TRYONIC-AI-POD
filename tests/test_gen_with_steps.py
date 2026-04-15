@@ -29,6 +29,7 @@ class TestArtworkGenerationSteps:
         tc_id = "TC_GEN_001"
         home = HomePage(page, base_url)
         screenshots = []
+        start_time = time.time()
 
         try:
             # ── Step 1: Truy cập trang ────────────────────────────────────────
@@ -119,7 +120,8 @@ class TestArtworkGenerationSteps:
                 screen="HomePage", module="ArtworkGeneration",
                 title="Generate artwork — Vietnamese prompt (step-by-step)",
                 priority="P0",
-                actual=f"Artwork visible in {elapsed:.1f}s. Dimensions: {dims}",
+                actual=f"Artwork visible. Dimensions: {dims}",
+                gen_time=f"{elapsed:.1f}s",
                 screenshot=screenshots[-1],
             )
 
@@ -134,6 +136,7 @@ class TestArtworkGenerationSteps:
                 title="Generate artwork — Vietnamese prompt (step-by-step)",
                 priority="P0",
                 actual=str(exc),
+                gen_time=f"{time.time() - start_time:.1f}s",
                 screenshot=s,
                 bug_id="BUG-GEN-001",
                 bug_desc=str(exc),

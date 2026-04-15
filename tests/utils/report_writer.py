@@ -19,6 +19,7 @@ class ReportWriter:
     HEADERS = [
         "TC_ID", "Screen", "Module", "Title", "Type", "Priority",
         "Steps", "Expected_Result", "Actual_Result",
+        "Generation_Time",
         "Result_R1", "Test_Date_R1", "Tester_R1",
         "Bug_ID_R1", "Bug_Desc_R1", "Evidence", "Notes",
     ]
@@ -46,6 +47,7 @@ class ReportWriter:
         expected: str = "",
         actual: str = "",
         error: str = "",
+        gen_time: str = "",             # e.g. "47.4s" — artwork generation elapsed time
         screenshot: str = "",
         bug_id: str = "",
         bug_desc: str = "",
@@ -61,6 +63,7 @@ class ReportWriter:
             "Steps": steps,
             "Expected_Result": expected,
             "Actual_Result": actual or error,
+            "Generation_Time": gen_time,
             "Result_R1": status,
             "Test_Date_R1": datetime.now().strftime("%Y-%m-%d %H:%M"),
             "Tester_R1": "Playwright CI",

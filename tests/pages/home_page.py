@@ -280,3 +280,34 @@ class HomePage(BasePage):
     def assert_generate_button_enabled(self) -> None:
         btn = self.get_generate_button()
         expect(btn).to_be_enabled()
+
+    def assert_artwork_relevance(self, artwork: Locator, prompt_text: str) -> tuple:
+        """
+        Kiểm tra ảnh artwork:
+          1. Không phải static placeholder (kiểm tra URL)
+          2. Không phải hình hộp quà (Claude Vision)
+          3. Nội dung liên quan đến prompt (Claude Vision)
+
+        Raise AssertionError nếu fail. Trả (True, reason) nếu pass.
+        """
+        from utils.image_verifier import check_artwork  # noqa: PLC0415
+
+        # ── Kiểm tra URL tĩnh ────────────────────────────────────────────────
+        src = artwork.get_attribute("src") or ""
+        for pat in self._STATIC_ASSET_PATTERNS:
+            if pat in src:
+                raise AssertionError(
+                    f"Artwork la static placeholder (URL: {src[:80]})"
+                )
+
+        # ── Lấy ảnh và gửi cho Claude Vision ────────────────────────────────
+        try:
+            img_bytes = artwork.screenshot()
+        except Exception as e:
+            raise AssertionError(f"Khong the chup anh artwork: {e}") from e
+
+        ok, reason = check_artwork(img_bytes, prompt_text)
+        if not ok:
+            raise AssertionError(reason)
+
+        return True, reason

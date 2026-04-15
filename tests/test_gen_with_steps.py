@@ -4,6 +4,7 @@ Chạy: pytest tests/test_gen_with_steps.py --headed -v
 """
 
 import time
+import pytest
 from playwright.sync_api import Page, expect
 
 from pages.home_page import HomePage
@@ -12,6 +13,7 @@ from utils.report_writer import ReportWriter
 PROMPT_VI = "Tôi yêu bóng đá và màu xanh lá — tạo cho tôi một thiết kế thể thao"
 
 
+@pytest.mark.artwork
 class TestArtworkGenerationSteps:
 
     def test_TC_GEN_001_step_by_step(self, page: Page, base_url: str, report: ReportWriter):
@@ -89,7 +91,14 @@ class TestArtworkGenerationSteps:
             s = home.take_screenshot("STEP7_artwork_appeared", folder="TC_GEN_001")
             screenshots.append(s)
 
-            # ── Step 8: Kiểm tra dimensions + viewport ────────────────────────
+            # ── Step 8: Kiểm tra nội dung ảnh (gift box / relevance) ─────────
+            print(f"[WAIT] Step 8: Dang kiem tra noi dung anh bang AI Vision...")
+            _, vision_reason = home.assert_artwork_relevance(artwork, PROMPT_VI)
+            s = home.take_screenshot("STEP8_vision_check_PASS", folder="TC_GEN_001")
+            screenshots.append(s)
+            print(f"[PASS] Step 8: Vision check OK - {vision_reason}")
+
+            # ── Step 9: Kiểm tra dimensions + viewport ────────────────────────
             artwork.scroll_into_view_if_needed()
             home.assert_artwork_visible(artwork)
             home.assert_artwork_has_dimensions(artwork)
@@ -99,13 +108,13 @@ class TestArtworkGenerationSteps:
                 const real = imgs.find(i => i.naturalWidth > 0);
                 return real ? { w: real.naturalWidth, h: real.naturalHeight, src: real.src.substring(0, 80) } : null;
             }""")
-            print(f"[PASS] Step 8: Artwork dimensions - {dims}")
+            print(f"[PASS] Step 9: Artwork dimensions - {dims}")
 
-            # ── Step 9: Screenshot cuối đầy đủ ────────────────────────────────
+            # ── Step 10: Screenshot cuối đầy đủ ───────────────────────────────
             page.wait_for_timeout(500)
-            s = home.take_screenshot("STEP9_PASS_ket_qua_cuoi", folder="TC_GEN_001")
+            s = home.take_screenshot("STEP10_PASS_ket_qua_cuoi", folder="TC_GEN_001")
             screenshots.append(s)
-            print(f"[PASS] Step 9: Final screenshot - {s}")
+            print(f"[PASS] Step 10: Final screenshot - {s}")
 
             # ── Báo cáo ───────────────────────────────────────────────────────
             print(f"\n{'='*60}")
@@ -120,10 +129,30 @@ class TestArtworkGenerationSteps:
                 screen="HomePage", module="ArtworkGeneration",
                 title="Generate artwork — Vietnamese prompt (step-by-step)",
                 priority="P0",
-                actual=f"Artwork visible. Dimensions: {dims}",
+                actual=f"Artwork OK. Vision: {vision_reason}. Dims: {dims}",
                 gen_time=f"{elapsed:.1f}s",
                 screenshot=screenshots[-1],
             )
+
+        except AssertionError as exc:
+            # Vision check hoặc dimension check thất bại
+            s = home.take_screenshot("STEP_FAIL_assertion", folder="TC_GEN_001")
+            screenshots.append(s)
+            err = str(exc)
+            print(f"\n[FAIL] TC_GEN_001 FAIL (assertion): {err}")
+            bug_id = "BUG-GEN-VISION-001" if "GIFT_BOX" in err or "NOT_RELEVANT" in err else "BUG-GEN-001"
+            report.add(
+                tc_id, "FAIL",
+                screen="HomePage", module="ArtworkGeneration",
+                title="Generate artwork — Vietnamese prompt (step-by-step)",
+                priority="P0",
+                actual=err,
+                gen_time=f"{time.time() - start_time:.1f}s",
+                screenshot=s,
+                bug_id=bug_id,
+                bug_desc=err,
+            )
+            raise
 
         except Exception as exc:
             s = home.take_screenshot("STEP_FAIL", folder="TC_GEN_001")

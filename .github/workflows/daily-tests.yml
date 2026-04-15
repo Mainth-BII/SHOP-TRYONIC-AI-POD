@@ -61,7 +61,7 @@ jobs:
       - name: Set test markers
         id: markers
         run: |
-          SUITE="${{ github.event.inputs.test_suite || 'all' }}"
+          SUITE="${{ github.event.inputs.test_suite || 'artwork' }}"
           if [ "$SUITE" = "smoke" ]; then
             echo "args=-m smoke" >> $GITHUB_OUTPUT
           elif [ "$SUITE" = "artwork" ]; then
@@ -85,6 +85,7 @@ jobs:
           BASE_URL: ${{ env.BASE_URL }}
           CI: "true"
           PYTHONPATH: ${{ github.workspace }}/tests
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           python -m pytest tests/ \
             ${{ steps.markers.outputs.args }} \

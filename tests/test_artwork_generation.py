@@ -26,6 +26,7 @@ PROMPT_XSS = "<script>alert('xss')</script>"
 PROMPT_EMOJI = "🎨🌈🎸🎯🏆"
 
 
+@pytest.mark.artwork
 class TestArtworkGeneration:
     """TC_GEN_001 — TC_GEN_009: Happy-path artwork generation."""
 

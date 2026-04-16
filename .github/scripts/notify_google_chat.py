@@ -11,11 +11,40 @@ import json
 import glob
 import base64
 import requests
+import csv
 from datetime import datetime
+
+# Default public ID, or use environment variable for privacy
+IMGUR_CLIENT_ID = os.environ.get("IMGUR_CLIENT_ID", "546c25a59c58ad7")
 
 
 def get_env(key: str, default: str = "") -> str:
     return os.environ.get(key, default)
+
+
+def upload_to_imgur(image_path: str) -> str:
+    """Upload image to Imgur and return the direct link."""
+    if not image_path or image_path == "None" or not os.path.exists(image_path):
+        return ""
+    
+    url = "https://api.imgur.com/3/image"
+    headers = {"Authorization": f"Client-ID {IMGUR_CLIENT_ID}"}
+    
+    try:
+        with open(image_path, "rb") as f:
+            img_data = base64.b64encode(f.read())
+        
+        response = requests.post(url, headers=headers, data={"image": img_data})
+        if response.status_code == 200:
+            link = response.json()["data"]["link"]
+            print(f"[notify] Uploaded to Imgur: {link}")
+            return link
+        else:
+            print(f"[notify] Imgur upload failed: {response.text}")
+            return ""
+    except Exception as e:
+        print(f"[notify] Imgur upload error: {e}")
+        return ""
 
 
 def _parse_csv_report() -> dict:
@@ -127,9 +156,15 @@ def build_payload(
                                     "collapsible": True,
                                     "widgets": [
                                         {
+                                            "image": {
+                                                "imageUrl": gen_details.get("Imgur_URL", "")
+                                            }
+                                        } if gen_details.get("Imgur_URL") else None,
+                                        {
                                             "textParagraph": {
                                                 "text": (
-                                                    f"<b>Review:</b> {gen_details.get('Actual_Result', 'No feedback available')}"
+                                                    f"<b>Review:</b> {gen_details.get('Actual_Result', 'No feedback available')}<br>"
+                                                    f"<b>Direct Link:</b> <a href=\"{gen_details.get('Imgur_URL', '#')}\">Click to View Original</a>"
                                                 )
                                             }
                                         }
@@ -248,7 +283,14 @@ def main() -> None:
 
     # Get TC_GEN_001 specific details first
     gen_details = _parse_csv_report()
-    gen_time = gen_details.get("Generation_Time", "N/A")
+
+    # NEW: Upload evidence to Imgur for direct viewing
+    evidence = gen_details.get("Evidence", "")
+    if evidence and os.path.exists(evidence):
+        print(f"[notify] Uploading {evidence} to Imgur...")
+        imgur_url = upload_to_imgur(evidence)
+        if imgur_url:
+            gen_details["Imgur_URL"] = imgur_url
 
     payload = build_payload(status, total, passed, failed, run_url, run_number, base_url, gen_details)
     ok = send(webhook_url, payload)

@@ -34,6 +34,8 @@ env:
   REPORT_DIR: "tests/test_reports"
   SCREENSHOT_DIR: "tests/screenshots"
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  # Để thay đổi nhóm chat, bạn chỉ cần dán link webhook mới vào đây:
+  GOOGLE_CHAT_WEBHOOK_URL: "https://chat.googleapis.com/v1/spaces/AAQAnJCvuH4/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=FldqIuhTmVo0okEMkQznxvLuf_piUQ-0gn0N0PP-dmU"
 
 jobs:
   test:

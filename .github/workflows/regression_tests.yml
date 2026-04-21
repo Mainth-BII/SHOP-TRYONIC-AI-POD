@@ -76,3 +76,20 @@ jobs:
             screenshots/
             test-results/
           retention-days: 7
+
+      - name: Send Google Chat Notification
+        if: always()
+        run: |
+          STATUS="${{ job.status }}"
+          COLOR="#2eb886"
+          [ "$STATUS" != "success" ] && COLOR="#a30200"
+          
+          MESSAGE="<b>🚀 Tryonic QA Report</b><br>
+          <b>Status:</b> ${STATUS}<br>
+          <b>Branch:</b> ${{ github.ref_name }}<br>
+          <b>Commit:</b> ${{ github.event.head_commit.message }}<br>
+          <a href=\"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\">Xem chi tiết Report tại đây</a>"
+          
+          curl -X POST -H "Content-Type: application/json; charset=UTF-8" \
+            "${{ secrets.GOOGLE_CHAT_WEBHOOK }}" \
+            -d "{\"text\": \"$MESSAGE\"}"

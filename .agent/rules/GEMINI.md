@@ -125,7 +125,7 @@ Full protocol: `@[skills/qa-planning]`
 ### Project Type: QA Automation
 - **Primary Agent**: `qa-playwright-engineer`
 - **Test Framework**: Playwright (Python)
-- **Test URL**: `https://admin.shop.tryonic.ai/home/`
+- **Test URL**: `https://shop.tryonic.ai/`
 
 ### Gemini Mode Mapping
 

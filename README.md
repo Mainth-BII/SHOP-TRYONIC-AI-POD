@@ -1,46 +1,31 @@
-# 🧪 Tryonic QA — Test Automation Workspace
+# Tryonic Shop — Daily Monitoring Suite
 
-> Hệ thống QA tự động cho [Tryonic Shop](https://admin.shop.tryonic.ai/home/) — nền tảng thiết kế áo POD tích hợp AI.
+Dự án kiểm thử tự động hàng ngày cho hệ thống [shop.tryonic.ai](https://shop.tryonic.ai/).
 
----
+## 🚀 Cấu trúc dự án
+- `.agent/`: Cấu hình AI Agent hỗ trợ viết và debug test.
+- `tests/`: Chứa các script test Playwright (Python).
+  - `test_daily_smoke.py`: Kiểm tra tính sẵn sàng của các trang chính.
+  - `test_daily_auth.py`: Kiểm tra luồng đăng nhập.
+  - `test_daily_order.py`: Kiểm tra luồng đặt hàng.
+- `test_case/`: Tài liệu các bước thực hiện (Test Steps).
+- `screenshots/`: Lưu trữ ảnh minh chứng kết quả test.
 
-## Quick Start
+## 🛠 Cài đặt
+1. Cài đặt thư viện:
+   ```bash
+   pip install -r requirements.txt
+   playwright install chromium
+   ```
 
-```bash
-# Install Python dependencies
-pip install -r requirements.txt
+2. Chạy test:
+   ```bash
+   # Chạy toàn bộ suite Daily
+   pytest -m daily
+   
+   # Chạy riêng Smoke test
+   pytest -m smoke
+   ```
 
-# Install Playwright
-pip install playwright
-playwright install
-```
-
-## Cấu trúc Dự án
-
-```
-📁 .agent/          → AI Agents, Skills, Workflows
-📁 docs/            → Tài liệu dự án (PROJECT_GUIDE, AGENT_FLOW, BA specs)
-📁 Test cases/      → Test case Excel (master), scripts, JSON
-📁 source/          → Source code ứng dụng
-📁 tests/           → Playwright auto test scripts
-```
-
-## Tài liệu
-
-| File | Nội dung |
-|---|---|
-| [docs/PROJECT_GUIDE.md](docs/PROJECT_GUIDE.md) | Hướng dẫn sử dụng toàn diện |
-| [docs/AGENT_FLOW.md](docs/AGENT_FLOW.md) | Luồng hoạt động AI agents |
-| [docs/CHANGELOG.md](docs/CHANGELOG.md) | Lịch sử thay đổi |
-
-## Hệ thống AI
-
-| Thành phần | Số lượng | Chi tiết |
-|---|---|---|
-| **Agents** | 7 | orchestrator, planner, playwright-engineer, analyst, runner, reviewer, debugger |
-| **Skills** | 7 | tryonic-tc-management, webapp-testing, testing-patterns, clean-code, qa-planning, intelligent-routing, powershell |
-| **Workflows** | 6 | /testcase_update_protocol, /test, /debug, /plan, /status, /orchestrate |
-
-## License
-
-MIT
+## 📊 Báo cáo
+Kết quả test được lưu tại `tests/test_reports/` và ảnh minh chứng tại `screenshots/daily/`.

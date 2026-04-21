@@ -1,0 +1,18 @@
+{
+  "categories": [
+    {"id": "t-shirts", "name": "Áo Thun"},
+    {"id": "hoodie", "name": "Hoodie"},
+    {"id": "sweatshirt", "name": "Sweatshirt"}
+  ],
+  "prompts": [
+    "Cyberpunk cat wearing sunglasses",
+    "Galaxy wolf in forest",
+    "Abstract neon geometric patterns"
+  ],
+  "test_accounts": {
+    "standard": {
+      "email": "test@tryonic.ai",
+      "password": "password123"
+    }
+  }
+}

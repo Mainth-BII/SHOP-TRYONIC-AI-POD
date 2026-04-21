@@ -7,6 +7,7 @@ node_modules/
 # Sensitive — không commit lên git
 .env
 credentials/token.json
+auth_state/
 
 # Python
 __pycache__/
@@ -16,3 +17,9 @@ __pycache__/
 
 # Excel
 *.xlsx
+
+# Screenshots & Reports
+screenshots/
+tests/screenshots/
+test-results/
+tests/test_reports/

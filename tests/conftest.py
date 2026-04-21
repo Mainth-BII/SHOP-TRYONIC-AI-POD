@@ -1,16 +1,27 @@
 """Pytest fixtures shared across all Tryonic tests."""
 
+import sys
 import os
 from datetime import datetime
 import pytest
 from playwright.sync_api import Browser, BrowserContext, Page
+
+# Load .env nếu có — credentials sẽ available qua os.environ
+try:
+    from dotenv import load_dotenv
+    load_dotenv(override=False)  # không ghi đè env vars đã set sẵn (CI)
+except ImportError:
+    pass
+
+# Add 'tests' to sys.path to allow importing 'pages' and 'utils' folders
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 import pages.base_page as _base_page
 from utils.report_writer import ReportWriter
 
 # ── Constants ────────────────────────────────────────────────────────────────
 
-BASE_URL = os.getenv("BASE_URL", "https://pre-launch.tryonic.ai")
+BASE_URL = os.getenv("BASE_URL", "https://shop.tryonic.ai/")
 REPORT_DIR = "tests/test_reports"
 SCREENSHOT_DIR = "tests/screenshots"
 HEADLESS = os.getenv("CI", "false").lower() in ("1", "true", "yes")
@@ -129,6 +140,32 @@ def android_page(browser: Browser) -> Page:
     pg = context.new_page()
     yield pg
     context.close()
+
+
+# ── Page Object Fixtures ──────────────────────────────────────────────────────
+
+@pytest.fixture
+def home_page(page: Page, base_url: str) -> _base_page.BasePage:
+    from pages.home_page import HomePage
+    return HomePage(page, base_url)
+
+
+@pytest.fixture
+def studio_page(page: Page, base_url: str) -> _base_page.BasePage:
+    from pages.studio_page import StudioPage
+    return StudioPage(page, base_url)
+
+
+@pytest.fixture
+def auth_page(page: Page, base_url: str) -> _base_page.BasePage:
+    from pages.auth_modal_page import AuthModalPage
+    return AuthModalPage(page, base_url)
+
+
+@pytest.fixture
+def checkout_page(page: Page, base_url: str) -> _base_page.BasePage:
+    from pages.checkout_page import CheckoutPage
+    return CheckoutPage(page, base_url)
 
 
 # ── pytest-playwright options ────────────────────────────────────────────────

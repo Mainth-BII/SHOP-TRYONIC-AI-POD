@@ -23,3 +23,6 @@ screenshots/
 tests/screenshots/
 test-results/
 tests/test_reports/
+
+# Root images
+*.png

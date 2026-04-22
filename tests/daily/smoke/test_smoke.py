@@ -61,10 +61,11 @@ class TestDailySmoke:
         """TC_DAILY_007 — Studio: Mở modal đặt hàng."""
         self.studio.navigate()
         self.studio.open_order_modal()
-        self.studio.page.wait_for_timeout(2000)
         self.studio.shot("TC_DAILY_007", "1", "order_modal_opened", domain=self.domain)
-        
-        # Verify modal or checkout form
-        assert self.studio.page.locator("div[role='dialog'], [class*='modal'], form").first.is_visible(), \
-            "Order modal/form not visible"
-        print("  [PASS] Order modal verified")
+
+        # Flow mới: "Hoàn tất thiết kế" → navigate tới /review với nút "Đặt hàng"
+        on_review = "/review" in self.studio.page.url
+        has_order_btn = self.studio.page.locator("button:has-text('Đặt hàng')").is_visible(timeout=3000)
+        assert on_review or has_order_btn, \
+            f"Order flow không khởi động — URL: {self.studio.page.url}"
+        print("  [PASS] Order flow verified")

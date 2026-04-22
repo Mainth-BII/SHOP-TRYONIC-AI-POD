@@ -27,17 +27,11 @@ class TestDailyOrder:
         self.studio.page.wait_for_timeout(2000)
         self.studio.shot("TC_DAILY_100", "1", "order_modal_opened", domain=self.domain)
         
-        # S2: Chọn size và Thêm vào giỏ
-        self.checkout.select_size_if_shown()
-        
-        add_btn = self.studio.page.locator("button:has-text('Thêm vào giỏ'), button:has-text('Add to cart')").first
-        assert add_btn.is_visible(), "Add to cart button not found"
-        add_btn.click()
-        
-        self.studio.page.wait_for_timeout(2000)
-        self.studio.shot("TC_DAILY_100", "2", "after_add_to_cart", domain=self.domain)
-        
-        # Verify toast hoặc icon giỏ hàng
-        assert self.checkout.add_to_cart_toast.is_visible(timeout=5000) or self.checkout.cart_badge.is_visible(), \
-            "No feedback after adding to cart"
-        print("  [PASS] Add to cart flow verified")
+        # S2: Trên trang /review — verify nút "Đặt hàng" tồn tại
+        # (Flow mới: studio → /review với variant selector + Đặt hàng)
+        order_btn = self.studio.page.locator("button:has-text('Đặt hàng')").first
+        assert order_btn.is_visible(timeout=5000), \
+            f"Nút 'Đặt hàng' không thấy trên trang review — URL: {self.studio.page.url}"
+
+        self.studio.shot("TC_DAILY_100", "2", "review_page_with_order_btn", domain=self.domain)
+        print("  [PASS] Review page với nút Đặt hàng verified")

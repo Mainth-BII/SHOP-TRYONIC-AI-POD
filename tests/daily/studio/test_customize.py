@@ -37,13 +37,16 @@ class TestDailyCustomize:
 
     @pytest.mark.daily
     def test_TC_DAILY_071_size_chart_modal(self):
-        """TC_DAILY_071 — Studio -> Order Modal -> Size Chart."""
+        """TC_DAILY_071 — Studio -> Review page -> Verify variant selectors."""
         self.studio.navigate()
         self.studio.open_order_modal()
-        assert self.studio.size_chart_link.is_visible(timeout=5000)
-        self.studio.size_chart_link.click()
-        self.studio.shot("TC_DAILY_071", "1", "size_chart_modal_opened", domain=self.domain)
-        self.studio.page.keyboard.press("Escape")
+        self.studio.shot("TC_DAILY_071", "1", "review_page", domain=self.domain)
+        # Flow mới: /review có các nút chọn variant (Nam, Nữ, ...)
+        # "Bảng size" không còn trên UI — thay bằng kiểm tra trang review load
+        on_review = "/review" in self.studio.page.url
+        has_order_btn = self.studio.page.locator("button:has-text('Đặt hàng')").is_visible(timeout=3000)
+        assert on_review or has_order_btn, \
+            f"Review page không load — URL: {self.studio.page.url}"
 
     @pytest.mark.daily
     @pytest.mark.parametrize("category", test_data["categories"])

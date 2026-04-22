@@ -105,6 +105,11 @@ class StudioPage(BasePage):
         self.order_button.wait_for(state="visible", timeout=15_000)
         self.order_button.scroll_into_view_if_needed()
         self.order_button.click()
+        # Chờ navigate tới trang /review (flow mới)
+        try:
+            self.page.wait_for_url("**/studio/**/review", timeout=8_000)
+        except Exception:
+            self.page.wait_for_timeout(2000)
 
     # ── Assertions / Checks ──────────────────────────────────────────────────
 

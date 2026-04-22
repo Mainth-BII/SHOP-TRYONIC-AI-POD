@@ -14,7 +14,10 @@ class AuthModalPage(BasePage):
 
     @property
     def modal(self) -> Locator:
-        return self.page.locator("div[role='dialog']").first
+        # Radix UI dialog content có role='dialog' và data-state='open'
+        return self.page.locator(
+            "[role='dialog'][data-state='open'], [role='dialog']:visible"
+        ).first
 
     def is_open(self, timeout: int = 5000) -> bool:
         try:
@@ -22,43 +25,46 @@ class AuthModalPage(BasePage):
         except Exception:
             return False
 
-    # ── Login form locators ──────────────────────────────────────────────────
+    # ── Login form locators — query page directly (modal không dùng role=dialog) ──
 
     @property
     def email_input(self) -> Locator:
-        return self.modal.locator(
-            "input[type='email'], input[name='email'], input[placeholder*='Email']"
+        return self.page.locator(
+            "input[type='email'], input[name='email'], input[placeholder*='Email'], "
+            "input[placeholder*='email'], input[placeholder*='name@']"
         ).first
 
     @property
     def password_input(self) -> Locator:
-        return self.modal.locator(
+        return self.page.locator(
             "input[type='password'], input[name='password']"
         ).first
 
     @property
     def submit_button(self) -> Locator:
-        return self.modal.locator(
-            "button[type='submit'], button:has-text('Đăng nhập')"
+        # Tìm trong form hoặc role=dialog để tránh match vào nút header
+        return self.page.locator(
+            "form button[type='submit'], form button:has-text('Đăng nhập'), "
+            "[role='dialog'] button[type='submit'], [role='dialog'] button:has-text('Đăng nhập')"
         ).first
 
     @property
     def google_button(self) -> Locator:
-        return self.modal.locator("button:has-text('Google')").first
+        return self.page.locator("button:has-text('Google'):visible").first
 
     @property
     def facebook_button(self) -> Locator:
-        return self.modal.locator("button:has-text('Facebook')").first
+        return self.page.locator("button:has-text('Facebook'):visible").first
 
     @property
     def register_link(self) -> Locator:
-        return self.modal.locator(
+        return self.page.locator(
             "a:has-text('Đăng ký'), button:has-text('Đăng ký')"
         ).first
 
     @property
     def forgot_password_link(self) -> Locator:
-        return self.modal.locator(
+        return self.page.locator(
             "a:has-text('Quên mật khẩu'), button:has-text('Quên mật khẩu')"
         ).first
 
@@ -73,19 +79,19 @@ class AuthModalPage(BasePage):
 
     @property
     def register_name_input(self) -> Locator:
-        return self.modal.locator(
+        return self.page.locator(
             "input[name='name'], input[placeholder*='Họ tên'], input[placeholder*='Ten']"
         ).first
 
     @property
     def register_email_input(self) -> Locator:
-        return self.modal.locator(
+        return self.page.locator(
             "input[type='email'], input[name='email']"
         ).first
 
     @property
     def register_submit(self) -> Locator:
-        return self.modal.locator(
+        return self.page.locator(
             "button[type='submit']:has-text('Đăng ký'), button:has-text('Tạo tài khoản')"
         ).first
 
@@ -93,11 +99,11 @@ class AuthModalPage(BasePage):
 
     @property
     def reset_email_input(self) -> Locator:
-        return self.modal.locator("input[type='email']").first
+        return self.page.locator("input[type='email']").first
 
     @property
     def reset_submit(self) -> Locator:
-        return self.modal.locator(
+        return self.page.locator(
             "button:has-text('Gửi'), button:has-text('Reset'), button[type='submit']"
         ).first
 

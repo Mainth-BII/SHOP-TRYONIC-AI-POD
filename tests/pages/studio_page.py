@@ -38,6 +38,7 @@ class StudioPage(BasePage):
     @property
     def order_button(self) -> Locator:
         return self.page.locator(
+            "button:has-text('Hoàn tất thiết kế'), button:has-text('Hoan tat thiet ke'), "
             "button:has-text('Đặt hàng'), button:has-text('Dat hang'), "
             "button:has-text('Order')"
         ).first
@@ -100,6 +101,8 @@ class StudioPage(BasePage):
         self.library_button.click()
 
     def open_order_modal(self) -> None:
+        self.order_button.wait_for(state="visible", timeout=15_000)
+        self.order_button.scroll_into_view_if_needed()
         self.order_button.click()
 
     # ── Assertions / Checks ──────────────────────────────────────────────────

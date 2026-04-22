@@ -42,27 +42,27 @@ class HomePage(BasePage):
     # Category filter buttons
     @property
     def cat_anime(self) -> Locator:
-        return self.page.locator('span:has-text("Anime")').first
+        return self.page.locator('span:has-text("Anime")').last
 
     @property
     def cat_ink(self) -> Locator:
-        return self.page.locator('span:has-text("Thủy mặc")').first
+        return self.page.locator('span:has-text("Thủy mặc")').last
 
     @property
     def cat_shape(self) -> Locator:
-        return self.page.locator('span:has-text("Hình khối")').first
+        return self.page.locator('span:has-text("Hình khối")').last
 
     @property
     def cat_street(self) -> Locator:
-        return self.page.locator('span:has-text("Đường phố")').first
+        return self.page.locator('span:has-text("Đường phố")').last
 
     @property
     def cat_abstract(self) -> Locator:
-        return self.page.locator('span:has-text("Trừu tượng")').first
+        return self.page.locator('span:has-text("Trừu tượng")').last
 
     @property
     def cat_3d(self) -> Locator:
-        return self.page.locator('span:has-text("Siêu thực/3D")').first
+        return self.page.locator('span:has-text("Siêu thực/3D")').last
 
     # ── Actions ──────────────────────────────────────────────────────────────
 
@@ -113,4 +113,5 @@ class HomePage(BasePage):
         }
         if name not in category_map:
             raise ValueError(f"Category '{name}' không tồn tại.")
-        category_map[name].click()
+        # dispatch_event bypasses pointer-events:none trên overlay span
+        category_map[name].dispatch_event("click")

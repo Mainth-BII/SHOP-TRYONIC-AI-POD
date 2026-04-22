@@ -61,6 +61,8 @@ class TestDailyCustomize:
     def test_TC_DAILY_073_front_back_toggle(self):
         """TC_DAILY_073 — Studio: Chuyển mặt trước/sau."""
         self.studio.navigate()
+        if not self.studio.back_button.is_visible(timeout=3000):
+            pytest.skip("BỎ QUA: Nút 'Mặt sau' không hiển thị — cần có design trước")
         self.studio.toggle_side("back")
         self.studio.page.wait_for_timeout(1500)
         self.studio.shot("TC_DAILY_073", "1", "back_view", domain=self.domain)

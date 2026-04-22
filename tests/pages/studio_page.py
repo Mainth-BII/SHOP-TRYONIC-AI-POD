@@ -78,6 +78,7 @@ class StudioPage(BasePage):
 
     def navigate(self, category_id: str = "t-shirts") -> None:
         self.goto(f"/studio?category={category_id}")
+        self.accept_terms()  # Dismiss Terms dialog luôn sau khi load studio
 
     def generate(self, prompt: str) -> None:
         self.prompt_input.fill(prompt)

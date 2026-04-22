@@ -47,24 +47,47 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Create output directories
+        run: mkdir -p tests/screenshots tests/test_reports
+
       - name: Install Playwright Browsers
-        run: npx playwright install --with-deps chromium
+        run: python -m playwright install --with-deps chromium
 
       - name: Run Tests (All)
         if: "${{ github.event.inputs.test_suite == 'all' || github.event_name != 'workflow_dispatch' }}"
-        run: pytest tests/ -v --maxfail=5
+        env:
+          PYTHONPATH: ${{ github.workspace }}/tests
+        run: |
+          python -m pytest tests/ -v --maxfail=5 \
+            --browser chromium \
+            --tb=short \
+            -p no:cacheprovider
 
       - name: Run Tests (Daily Only)
         if: "${{ github.event.inputs.test_suite == 'daily' }}"
-        run: pytest tests/daily/ -v
+        env:
+          PYTHONPATH: ${{ github.workspace }}/tests
+        run: |
+          python -m pytest tests/daily/ -v \
+            --browser chromium \
+            --tb=short
 
       - name: Run Tests (Production Only)
         if: "${{ github.event.inputs.test_suite == 'production' }}"
-        run: pytest tests/production/ -v
+        env:
+          PYTHONPATH: ${{ github.workspace }}/tests
+        run: |
+          python -m pytest tests/production/ -v \
+            --browser chromium \
+            --tb=short
 
       - name: Run Tests (API Only)
         if: "${{ github.event.inputs.test_suite == 'api' }}"
-        run: pytest tests/api/ -v
+        env:
+          PYTHONPATH: ${{ github.workspace }}/tests
+        run: |
+          python -m pytest tests/api/ -v \
+            --tb=short
 
       - name: Upload Test Reports & Screenshots
         if: always()

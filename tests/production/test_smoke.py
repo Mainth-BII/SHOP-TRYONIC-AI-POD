@@ -32,6 +32,8 @@ class TestProductionSmoke:
         
         categories = ["Anime", "Thủy mặc", "Hình khối"]
         for i, cat in enumerate(categories):
+            target = self.home.page.locator(f"span:has-text('{cat}')").first
+            target.scroll_into_view_if_needed()
             self.home.select_category(cat)
             self.home.page.wait_for_timeout(500)
             # Chụp ảnh verify mỗi category

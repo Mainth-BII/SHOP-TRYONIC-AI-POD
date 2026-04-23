@@ -6,8 +6,6 @@ from playwright.sync_api import Page
 
 _BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Populated by conftest._setup_run_dir (session autouse fixture).
-SESSION_RUN_DIR: str = ""
 
 
 class BasePage:
@@ -35,9 +33,9 @@ class BasePage:
 
     # ── Screenshots ─────────────────────────────────────────────────────────
 
-    def shot(self, tc_id: str, step: str, label: str, domain: str = "smoke", sub_dir: str = "") -> None:
-        """Chụp screenshot vào screenshots/daily/[domain]/[sub_dir]/[tc_id]/."""
-        parts = [_BASE_DIR, "screenshots", "daily", domain]
+    def shot(self, tc_id: str, step: str, label: str, domain: str = "smoke", sub_dir: str = "", root: str = "daily") -> None:
+        """Chụp screenshot vào screenshots/[root]/[domain]/[sub_dir]/[tc_id]/."""
+        parts = [_BASE_DIR, "screenshots", root, domain]
         if sub_dir:
             parts.append(sub_dir)
         parts.append(tc_id)
@@ -50,22 +48,6 @@ class BasePage:
             print(f"  [SHOT] {tc_id} S{step}: {label}")
         except Exception as e:
             print(f"  [SHOT FAIL] {tc_id} S{step}: {e}")
-
-    def take_screenshot(self, name: str, folder: str = "") -> str:
-        """Chụp screenshot theo session run dir (dùng cho BasePage fixture cũ)."""
-        import pages.base_page as _m
-        parts = ["tests/screenshots"]
-        if _m.SESSION_RUN_DIR:
-            parts.append(_m.SESSION_RUN_DIR)
-        if folder:
-            parts.append(folder)
-        base_dir = os.path.join(*parts)
-        os.makedirs(base_dir, exist_ok=True)
-        ts = datetime.now().strftime("%H%M%S")
-        filename = f"{name}_{ts}.png"
-        path = os.path.join(base_dir, filename)
-        self.page.screenshot(path=path, full_page=False)
-        return path
 
     # ── Dialogs ─────────────────────────────────────────────────────────────
 

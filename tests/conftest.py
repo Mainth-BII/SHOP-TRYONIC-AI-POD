@@ -18,39 +18,78 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 import pages.base_page as _base_page
 from utils.report_writer import ReportWriter
+from config.environments import get_environment, Environment
 
 # ── Constants ────────────────────────────────────────────────────────────────
 
-BASE_URL = os.getenv("BASE_URL", "https://shop.tryonic.ai/")
 REPORT_DIR = "tests/test_reports"
-SCREENSHOT_DIR = "tests/screenshots"
+SCREENSHOT_DIR = "screenshots"
 HEADLESS = os.getenv("CI", "false").lower() in ("1", "true", "yes")
 
-# ── Screenshot run directory ─────────────────────────────────────────────────
+
+# ── CLI option: --env ────────────────────────────────────────────────────────
+
+def pytest_addoption(parser):
+    parser.addoption(
+        "--env",
+        action="store",
+        default=os.getenv("TEST_ENV", "test"),
+        help="Target environment: test (default) | prod",
+    )
+
+
+# ── Resolve environment once at session start ────────────────────────────────
+
+_active_env: Environment | None = None
+
+
+def _resolve_env(config) -> Environment:
+    global _active_env
+    if _active_env is None:
+        env_name = config.getoption("--env")
+        _active_env = get_environment(env_name)
+    return _active_env
+
+
+# ── pytest_configure — banner + dirs ─────────────────────────────────────────
+
+def pytest_configure(config):
+    """Print environment banner and ensure directories exist."""
+    os.makedirs("screenshots", exist_ok=True)
+    os.makedirs("tests/test_reports", exist_ok=True)
+
+    # Register custom markers
+    config.addinivalue_line("markers", "production: Test quan trọng trên môi trường Live")
+
+
+def pytest_sessionstart(session):
+    """Print environment banner at the very start of the test session."""
+    env = _resolve_env(session.config)
+    login_line = f"║  LOGIN: {env.login_email:<52}║" if env.login_email else "║  LOGIN: (không đăng nhập)                                   ║"
+    banner = (
+        "\n"
+        "╔══════════════════════════════════════════════════════════════╗\n"
+        f"║  🌐 MÔI TRƯỜNG: {env.name.upper():<44}║\n"
+        f"║  FE:    {env.fe_url:<53}║\n"
+        f"║  API:   {env.api_url:<53}║\n"
+        f"║  ADMIN: {env.admin_url:<53}║\n"
+        f"  {login_line}\n"
+        "╚══════════════════════════════════════════════════════════════╝"
+    )
+    print(banner)
+
+
+# ── Auto-clear screenshots before each session ───────────────────────────────
 
 @pytest.fixture(scope="session", autouse=True)
-def _setup_run_dir() -> None:
-    """
-    Create screenshots/DD-MM-YYYY/Lan_N/ for this session and wire it
-    into BasePage.SESSION_RUN_DIR so every take_screenshot() call lands there.
-
-    Lần 1 = first run of the day (08:00), Lần 2 = second run (16:00).
-    """
-    date_str = datetime.now().strftime("%d-%m-%Y")
-    date_folder = os.path.join(SCREENSHOT_DIR, date_str)
-    os.makedirs(date_folder, exist_ok=True)
-
-    existing = [
-        d for d in os.listdir(date_folder)
-        if os.path.isdir(os.path.join(date_folder, d)) and d.startswith("Lan_")
-    ]
-    run_num = len(existing) + 1
-    run_dir = os.path.join(date_str, f"Lan_{run_num}")
-    os.makedirs(os.path.join(SCREENSHOT_DIR, run_dir), exist_ok=True)
-
-    _base_page.SESSION_RUN_DIR = run_dir
-    print(f"\n[INFO] Screenshots: {SCREENSHOT_DIR}/{run_dir}/")
-
+def _clear_screenshots() -> None:
+    """Xóa toàn bộ screenshots cũ trước khi chạy session mới."""
+    import shutil
+    shot_dir = os.path.join(os.getcwd(), "screenshots")
+    if os.path.exists(shot_dir):
+        shutil.rmtree(shot_dir)
+    os.makedirs(shot_dir, exist_ok=True)
+    print("\n[INFO] Screenshots cũ đã được xóa. Sẵn sàng chụp mới.")
 
 # ── Session-scoped report ────────────────────────────────────────────────────
 
@@ -64,14 +103,33 @@ def report() -> ReportWriter:
     print(f"\n[Report] Files: {paths}")
 
 
-# ── Base URL ─────────────────────────────────────────────────────────────────
+# ── Environment fixtures ─────────────────────────────────────────────────────
+
+@pytest.fixture(scope="session")
+def env(request) -> Environment:
+    """Active environment config — inject anywhere you need URLs."""
+    return _resolve_env(request.config)
+
 
 @pytest.fixture(scope="session")
 def base_url(request) -> str:
-    # pytest-playwright also provides base_url from --base-url flag.
-    # Fall back to our constant if not supplied via CLI.
+    """FE base URL — resolved from --env flag or TEST_ENV env var."""
     cli_val = request.config.getoption("--base-url", default=None)
-    return cli_val or BASE_URL
+    if cli_val:
+        return cli_val
+    return _resolve_env(request.config).fe_url
+
+
+@pytest.fixture(scope="session")
+def api_url(request) -> str:
+    """API base URL for the active environment."""
+    return _resolve_env(request.config).api_url
+
+
+@pytest.fixture(scope="session")
+def admin_url(request) -> str:
+    """Admin panel URL for the active environment."""
+    return _resolve_env(request.config).admin_url
 
 
 # ── Browser context — desktop ────────────────────────────────────────────────
@@ -166,13 +224,3 @@ def auth_page(page: Page, base_url: str) -> _base_page.BasePage:
 def checkout_page(page: Page, base_url: str) -> _base_page.BasePage:
     from pages.checkout_page import CheckoutPage
     return CheckoutPage(page, base_url)
-
-
-# ── pytest-playwright options ────────────────────────────────────────────────
-
-def pytest_configure(config):  # noqa: ARG001
-    """Ensure screenshots folder exists."""
-    os.makedirs("screenshots", exist_ok=True)
-    # Ensure standard dirs exist
-    os.makedirs("tests/test_reports", exist_ok=True)
-    os.makedirs("tests/screenshots", exist_ok=True)

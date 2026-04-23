@@ -25,8 +25,80 @@ class CheckoutPage(BasePage):
     @property
     def size_s_button(self) -> Locator:
         return self.page.locator(
-            "[data-size='S'], button:has-text('S'), label:has-text('S'), "
-            "[role='dialog'] button:has-text('S')"
+            "[data-size='S'], button:text-is('S'), label:text-is('S')"
+        ).first
+
+    @property
+    def size_m_button(self) -> Locator:
+        return self.page.locator(
+            "[data-size='M'], button:text-is('M'), label:text-is('M')"
+        ).first
+
+    @property
+    def size_l_button(self) -> Locator:
+        return self.page.locator(
+            "[data-size='L'], button:text-is('L'), label:text-is('L')"
+        ).first
+
+    @property
+    def quantity_input(self) -> Locator:
+        return self.page.locator(
+            "input[name='quantity'], input[name*='qty'], input[type='number'][min], "
+            "[class*='quantity'] input, [class*='Quantity'] input"
+        ).first
+
+    @property
+    def quantity_increment_button(self) -> Locator:
+        return self.page.locator(
+            "button:has-text('+'), [aria-label*='tăng'], [aria-label*='increase'], "
+            "[class*='increment'], [class*='plus']"
+        ).first
+
+    @property
+    def recipient_name_input(self) -> Locator:
+        return self.page.locator(
+            "input[name='name'], input[name='fullName'], input[name='recipientName'], "
+            "input[placeholder*='Họ tên'], input[placeholder*='họ và tên'], "
+            "input[placeholder*='Tên người nhận']"
+        ).first
+
+    @property
+    def recipient_phone_input(self) -> Locator:
+        return self.page.locator(
+            "input[name='phone'], input[name='phoneNumber'], input[type='tel'], "
+            "input[placeholder*='Số điện thoại'], input[placeholder*='số điện thoại']"
+        ).first
+
+    @property
+    def recipient_address_input(self) -> Locator:
+        return self.page.locator(
+            "input[name='address'], textarea[name='address'], "
+            "input[placeholder*='Địa chỉ'], input[placeholder*='địa chỉ'], "
+            "textarea[placeholder*='Địa chỉ']"
+        ).first
+
+    @property
+    def payment_button(self) -> Locator:
+        return self.page.locator(
+            "button:has-text('Thanh toán'), button:has-text('Xác nhận thanh toán'), "
+            "button:has-text('Đặt hàng'), button:has-text('Hoàn tất đặt hàng')"
+        ).first
+
+    @property
+    def tax_code_input(self) -> Locator:
+        """Field CCCD / Mã số thuế (bắt buộc để xuất hóa đơn)."""
+        return self.page.locator(
+            "input[name*='tax'], input[name*='cccd'], input[name*='mst'], "
+            "input[placeholder*='CCCD'], input[placeholder*='MST'], "
+            "input[placeholder*='cá nhân'], input[placeholder*='công ty']"
+        ).first
+
+    @property
+    def qr_code_locator(self) -> Locator:
+        return self.page.locator(
+            "img[alt*='QR'], img[src*='qr'], img[src*='QR'], "
+            "canvas[id*='qr'], [class*='qr-code'], [class*='QrCode'], "
+            ":text('Quét mã'), :text('mã QR'), :text('QR Code')"
         ).first
 
     @property
@@ -44,9 +116,9 @@ class CheckoutPage(BasePage):
 
     @property
     def buy_now_button(self) -> Locator:
+        # contains() để handle emoji prefix (vd: '🛒 Mua ngay')
         return self.page.locator(
-            "button:has-text('Mua ngay'), button:has-text('Thanh toán ngay'), "
-            "button:has-text('Checkout'), button:has-text('Đặt hàng ngay')"
+            "xpath=//button[contains(normalize-space(), 'Mua ngay')]"
         ).first
 
     @property
@@ -85,6 +157,111 @@ class CheckoutPage(BasePage):
 
     def navigate_cart(self) -> None:
         self.goto("/cart")
+
+    def select_size_l(self, tc_id: str = "") -> bool:
+        """Chọn size L. Trả về True nếu thành công."""
+        try:
+            btn = self.size_l_button
+            if btn.is_visible(timeout=5000):
+                btn.click()
+                self.page.wait_for_timeout(500)
+                if tc_id:
+                    print(f"  [INFO] {tc_id}: Đã chọn size L")
+                return True
+        except Exception:
+            pass
+        if tc_id:
+            print(f"  [WARN] {tc_id}: Không tìm thấy nút size L")
+        return False
+
+    def set_quantity(self, qty: int, tc_id: str = "") -> bool:
+        """Đặt số lượng. Thử input trực tiếp, fallback sang nút +. Trả về True nếu thành công."""
+        try:
+            inp = self.quantity_input
+            if inp.is_visible(timeout=3000):
+                inp.triple_click()
+                inp.fill(str(qty))
+                self.page.wait_for_timeout(300)
+                if tc_id:
+                    print(f"  [INFO] {tc_id}: Đã nhập số lượng = {qty}")
+                return True
+        except Exception:
+            pass
+        try:
+            inc = self.quantity_increment_button
+            if inc.is_visible(timeout=2000):
+                for _ in range(qty - 1):
+                    inc.click()
+                    self.page.wait_for_timeout(200)
+                if tc_id:
+                    print(f"  [INFO] {tc_id}: Đã tăng số lượng lên {qty} qua nút +")
+                return True
+        except Exception:
+            pass
+        if tc_id:
+            print(f"  [WARN] {tc_id}: Không tìm thấy ô nhập số lượng")
+        return False
+
+    def fill_guest_shipping_info(self, name: str, phone: str, address: str, tc_id: str = "") -> None:
+        """Điền thông tin nhận hàng cho guest checkout."""
+        for field, locator, label in [
+            (name, self.recipient_name_input, "Họ tên"),
+            (phone, self.recipient_phone_input, "Số điện thoại"),
+            (address, self.recipient_address_input, "Địa chỉ"),
+        ]:
+            try:
+                if locator.is_visible(timeout=5000):
+                    locator.click()
+                    locator.fill(field)
+                    self.page.wait_for_timeout(200)
+                    if tc_id:
+                        print(f"  [INFO] {tc_id}: Điền {label} = '{field[:20]}...' " if len(field) > 20 else f"  [INFO] {tc_id}: Điền {label}")
+                else:
+                    if tc_id:
+                        print(f"  [WARN] {tc_id}: Không tìm thấy field {label}")
+            except Exception as e:
+                if tc_id:
+                    print(f"  [WARN] {tc_id}: Lỗi điền {label}: {e}")
+
+    def fill_tax_code(self, tax_code: str, tc_id: str = "") -> bool:
+        """Nhập CCCD / Mã số thuế. Bắt buộc để enable nút Thanh toán."""
+        try:
+            inp = self.tax_code_input
+            if inp.is_visible(timeout=5000):
+                inp.click()
+                inp.fill(tax_code)
+                self.page.wait_for_timeout(300)
+                if tc_id:
+                    print(f"  [INFO] {tc_id}: Đủ Mã số thuế = '{tax_code}'")
+                return True
+        except Exception:
+            pass
+        if tc_id:
+            print(f"  [WARN] {tc_id}: Không tìm thấy field Mã số thuế")
+        return False
+
+    def is_qr_visible(self, timeout: int = 15000) -> bool:
+        """Kiểm tra màn hình QR code xuất hiện."""
+        try:
+            return self.qr_code_locator.is_visible(timeout=timeout)
+        except Exception:
+            return False
+
+    def select_size_m(self, tc_id: str = "") -> bool:
+        """Chọn size M. Trả về True nếu thành công."""
+        try:
+            btn = self.size_m_button
+            if btn.is_visible(timeout=5000):
+                btn.click()
+                self.page.wait_for_timeout(500)
+                if tc_id:
+                    print(f"  [INFO] {tc_id}: Đã chọn size M")
+                return True
+        except Exception:
+            pass
+        if tc_id:
+            print(f"  [WARN] {tc_id}: Không tìm thấy nút size M")
+        return False
 
     def select_size_if_shown(self, tc_id: str = "") -> None:
         """Chọn size S trong order modal nếu có."""

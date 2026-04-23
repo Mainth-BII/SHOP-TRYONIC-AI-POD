@@ -57,7 +57,12 @@ class StudioPage(BasePage):
 
     @property
     def back_button(self) -> Locator:
-        return self.page.locator("button:has-text('Mặt sau'), button:has-text('Mat sau')").first
+        # 'Xoay áo' button là nút xoay áo sang mặt sau trên Studio
+        return self.page.locator(
+            "button:has-text('Xoay áo'), button:has-text('Xoay ao'), "
+            "button:has-text('Mặt sau'), button:has-text('Mat sau'), "
+            "button[aria-label*='xoay'], button[aria-label*='Xoay']"
+        ).first
 
     @property
     def front_button(self) -> Locator:
@@ -74,6 +79,26 @@ class StudioPage(BasePage):
     def library_button(self) -> Locator:
         return self.page.locator("button:has-text('Thư Viện'), button:has-text('Thu Vien')").first
 
+    @property
+    def artwork_images(self) -> Locator:
+        """Ảnh artwork AI đã generate — hiển thị trong panel kết quả / thư viện."""
+        return self.page.locator(
+            "img[src*='generation'], img[src*='artwork'], img[src*='ai-'], "
+            "[class*='library'] img, [class*='Library'] img, "
+            "[class*='artwork'] img, [class*='result'] img, "
+            "[class*='generated'] img"
+        )
+
+    @property
+    def library_panel_images(self) -> Locator:
+        """Ảnh trong panel Thư Viện (ẢNH CỦA BẠN) — đã hiển thị sẵn ở sidebar trái."""
+        return self.page.locator(
+            "[class*='library'] img:visible, [class*='Library'] img:visible, "
+            "[class*='image-item'] img:visible, [class*='ImageItem'] img:visible, "
+            "[class*='thumb'] img:visible, [class*='Thumb'] img:visible, "
+            "[class*='gallery'] img:visible, [class*='panel'] img:visible"
+        )
+
     # ── Actions ──────────────────────────────────────────────────────────────
 
     def navigate(self, category_id: str = "t-shirts") -> None:
@@ -85,11 +110,30 @@ class StudioPage(BasePage):
         self.generate_button.click()
 
     def select_color(self, name: str) -> bool:
-        """Tìm và click vào màu cụ thể theo text hoặc attribute."""
+        """Tìm và click color swatch theo text, aria-label, title, data-color."""
+        # 1. Text content
         btn = self.page.locator("button").filter(has_text=name).first
-        if btn.is_visible(timeout=5000):
+        if btn.is_visible(timeout=3000):
             btn.click()
             return True
+        # 2. aria-label or title attribute
+        btn = self.page.locator(
+            f"button[aria-label*='{name}'], button[title*='{name}'], "
+            f"[data-color*='{name}']"
+        ).first
+        if btn.is_visible(timeout=3000):
+            btn.click()
+            return True
+        # 3. White-specific: background color style
+        if name.lower() in ("trắng", "trang", "white"):
+            btn = self.page.locator(
+                "button[style*='#fff'], button[style*='white'], "
+                "button[style*='#FFF'], button[style*='rgb(255, 255, 255)'], "
+                "[data-color='white'], [data-color='#ffffff']"
+            ).first
+            if btn.is_visible(timeout=3000):
+                btn.click()
+                return True
         return False
 
     def toggle_side(self, side: str = "back") -> None:
@@ -98,8 +142,97 @@ class StudioPage(BasePage):
         else:
             self.front_button.click()
 
+    def wait_for_artworks(self, count: int = 3, timeout: int = 120) -> tuple:
+        """Chờ AI tạo đủ `count` ảnh. Trả về (success, elapsed_seconds, found_count)."""
+        import time
+        start = time.time()
+        deadline = start + timeout
+        while time.time() < deadline:
+            try:
+                btn = self.finish_button
+                if btn.is_visible() and not btn.is_disabled():
+                    break
+            except Exception:
+                pass
+            self.page.wait_for_timeout(3000)
+        elapsed = round(time.time() - start, 1)
+        found = self.artwork_images.count()
+        return found >= count, elapsed, found
+
+    def click_artwork(self, index: int = 0) -> bool:
+        """Click ảnh từ left library panel (x < 330px) bằng JS position-based detection."""
+        try:
+            # Skip index 0 ('Thêm ảnh' card) → actual_index = index + 1
+            clicked = self.page.evaluate(f"""() => {{
+                const imgs = Array.from(document.querySelectorAll('img[src]')).filter(img => {{
+                    const rect = img.getBoundingClientRect();
+                    return rect.left < 330 && rect.width > 30 && rect.height > 30
+                           && img.complete && img.naturalWidth > 0;
+                }});
+                const target = imgs[{index + 1}];  // +1 to skip 'Thêm ảnh'
+                if (target) {{ target.click(); return true; }}
+                return false;
+            }}""")
+            if clicked:
+                self.page.wait_for_timeout(1500)
+                return True
+        except Exception:
+            pass
+        return False
+
+    def wait_for_canvas_artwork(self, timeout: int = 30, poll_ms: int = 500) -> float:
+        """Poll đến khi artwork hiện lên canvas áo (center x: 380–830px).
+        Trả về elapsed seconds, hoặc -1.0 nếu timeout."""
+        import time
+        start = time.time()
+        deadline = start + timeout
+        while time.time() < deadline:
+            try:
+                found = self.page.evaluate("""() => {
+                    const imgs = Array.from(document.querySelectorAll('img[src]')).filter(img => {
+                        const rect = img.getBoundingClientRect();
+                        return rect.left > 380 && rect.left < 830
+                               && rect.width > 50 && rect.height > 50
+                               && img.complete && img.naturalWidth > 0;
+                    });
+                    return imgs.length > 0;
+                }""")
+                if found:
+                    return round(time.time() - start, 2)
+            except Exception:
+                pass
+            self.page.wait_for_timeout(poll_ms)
+        return -1.0
+
+    def click_library_image(self, index: int = 0) -> bool:
+        """Click ảnh thứ `index` trong left library panel bằng JS position-based detection."""
+        try:
+            clicked = self.page.evaluate(f"""() => {{
+                const imgs = Array.from(document.querySelectorAll('img[src]')).filter(img => {{
+                    const rect = img.getBoundingClientRect();
+                    return rect.left < 330 && rect.width > 30 && rect.height > 30
+                           && img.complete && img.naturalWidth > 0;
+                }});
+                const target = imgs[{index}];
+                if (target) {{ target.click(); return true; }}
+                return false;
+            }}""")
+            if clicked:
+                self.page.wait_for_timeout(1000)
+                return True
+        except Exception:
+            pass
+        return False
+
     def open_library(self) -> None:
-        self.library_button.click()
+        """Mở panel Thư Viện nếu chưa mở. Safe to call khi đã mở sẵn."""
+        try:
+            lib_btn = self.library_button
+            if lib_btn.is_visible(timeout=2000):
+                lib_btn.click()
+                self.page.wait_for_timeout(1000)
+        except Exception:
+            pass  # Library đã mở sẵn, bỏ qua
 
     def open_order_modal(self) -> None:
         self.order_button.wait_for(state="visible", timeout=15_000)

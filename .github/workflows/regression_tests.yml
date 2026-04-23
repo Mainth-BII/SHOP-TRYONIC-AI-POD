@@ -31,6 +31,7 @@ jobs:
       DAILY_TEST_EMAIL: ${{ secrets.DAILY_TEST_EMAIL }}
       DAILY_TEST_PASSWORD: ${{ secrets.DAILY_TEST_PASSWORD }}
       CI: true
+      PYTHONPATH: ${{ github.workspace }}/tests
 
     steps:
       - name: Checkout Code
@@ -74,11 +75,10 @@ jobs:
 
       - name: Run Tests (Production Only)
         if: "${{ github.event.inputs.test_suite == 'production' }}"
-        env:
-          PYTHONPATH: ${{ github.workspace }}/tests
         run: |
           python -m pytest tests/production/ -v \
             --browser chromium \
+            --env=test \
             --tb=short
 
       - name: Run Tests (API Only)

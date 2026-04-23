@@ -1,9 +1,14 @@
-"""Pytest fixtures shared across all Tryonic tests."""
-
 import sys
 import os
 from datetime import datetime
 import pytest
+
+# Add 'tests/' to front of sys.path so 'config', 'pages', 'utils' are always found
+# Must be before any project imports — use insert(0) for highest priority
+_TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
+if _TESTS_DIR not in sys.path:
+    sys.path.insert(0, _TESTS_DIR)
+
 from playwright.sync_api import Browser, BrowserContext, Page
 
 # Load .env nếu có — credentials sẽ available qua os.environ
@@ -12,9 +17,6 @@ try:
     load_dotenv(override=False)  # không ghi đè env vars đã set sẵn (CI)
 except ImportError:
     pass
-
-# Add 'tests' to sys.path to allow importing 'pages' and 'utils' folders
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 import pages.base_page as _base_page
 from utils.report_writer import ReportWriter

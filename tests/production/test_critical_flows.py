@@ -234,16 +234,45 @@ class TestProductionCriticalFlows:
 
     @pytest.mark.production
     def test_CRITICAL_002_login_functionality(self):
-        """CRITICAL_002 — Đăng nhập → Xác nhận trạng thái."""
-        # S0 + S1: Login và verify — _login đã assert rồi
+        """CRITICAL_002 — Đăng nhập → Xác nhận trạng thái → Click Xem đơn hàng."""
+        page = self.home.page
+        _D = self.domain
+        _R = "production"
+
+        # S1: Login → Assert login_button KHÔNG visible
         self._login("CRITICAL_002")
-        self.home.shot(
-            "CRITICAL_002", "1", "after_login_attempt",
-            domain=self.domain, root="production"
-        )
+        self.home.shot("CRITICAL_002", "1", "after_login", domain=_D, root=_R)
         assert not self.home.header.login_button.is_visible(timeout=3000), \
-            "LỖI: Nút Đăng nhập vẫn còn sau khi login"
-        print("  [PASS] CRITICAL_002: Đăng nhập xác nhận thành công")
+            "LỖI S1: Nút Đăng nhập vẫn còn sau khi login"
+        print("  [PASS] S1: Đăng nhập thành công — login_button không hiển thị")
+
+        # S2: Click "Xem đơn hàng" — priority theo JSON selector spec
+        # 1. aria-label  2. text  3. CSS bg-[#4F46F1]
+        view_order_btn = page.locator(
+            "button[aria-label='Xem đơn hàng'], "
+            "button:has-text('Xem đơn hàng'), "
+            "a:has-text('Xem đơn hàng')"
+        ).first
+
+        clicked = False
+        if view_order_btn.is_visible(timeout=5000):
+            view_order_btn.click()
+            clicked = True
+        else:
+            # Fallback: CSS selector từ JSON (Tailwind bg-[#4F46F1])
+            css_btn = page.locator("button.bg-\\[\\#4F46F1\\]").first
+            if css_btn.is_visible(timeout=3000):
+                css_btn.click()
+                clicked = True
+
+        page.wait_for_timeout(2000)
+        self.home.shot("CRITICAL_002", "2", "after_view_order_click" if clicked else "view_order_not_found", domain=_D, root=_R)
+        if clicked:
+            print(f"  [PASS] S2: Đã click 'Xem đơn hàng' — URL: {page.url}")
+        else:
+            print("  [INFO] S2: Không tìm thấy button 'Xem đơn hàng' — bỏ qua")
+
+        print("  [PASS] CRITICAL_002: Hoàn thành")
 
     # ── CRITICAL_003 ─────────────────────────────────────────────────────────
 

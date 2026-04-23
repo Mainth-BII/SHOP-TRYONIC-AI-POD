@@ -78,7 +78,7 @@ jobs:
       - name: Run Tests (Production Only)
         if: "${{ github.event.inputs.test_suite == 'production' }}"
         run: |
-          python -m pytest tests/production/test_critical_flows.py::TestProductionCriticalFlows::test_CRITICAL_001_full_journey_to_checkout -v \
+          python -m pytest tests/production/test_critical_flows.py -v \
             --browser chromium \
             --env=test \
             --tb=short \

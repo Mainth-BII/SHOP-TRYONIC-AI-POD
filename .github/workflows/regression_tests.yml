@@ -102,17 +102,20 @@ jobs:
 
       - name: Send Google Chat Notification
         if: always()
+        env:
+          WEBHOOK_URL: ${{ secrets.GOOGLE_CHAT_WEBHOOK }}
+          COMMIT_MSG: ${{ github.event.head_commit.message || 'Manual trigger' }}
         run: |
           STATUS="${{ job.status }}"
-          COLOR="#2eb886"
-          [ "$STATUS" != "success" ] && COLOR="#a30200"
+          ICON="✅"
+          [ "$STATUS" != "success" ] && ICON="❌"
           
-          MESSAGE="<b>🚀 Tryonic QA Report</b><br>
-          <b>Status:</b> ${STATUS}<br>
-          <b>Branch:</b> ${{ github.ref_name }}<br>
-          <b>Commit:</b> ${{ github.event.head_commit.message }}<br>
-          <a href=\"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\">Xem chi tiết Report tại đây</a>"
+          TEXT="${ICON} *Tryonic QA Report*\nStatus: ${STATUS}\nBranch: ${{ github.ref_name }}\nCommit: ${COMMIT_MSG}\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|Xem chi tiết>"
           
-          curl -X POST -H "Content-Type: application/json; charset=UTF-8" \
-            "${{ secrets.GOOGLE_CHAT_WEBHOOK }}" \
-            -d "{\"text\": \"$MESSAGE\"}"
+          PAYLOAD=$(jq -n --arg text "$TEXT" '{"text": $text}')
+          
+          curl -s -o /dev/null -w "HTTP %{http_code}" \
+            -X POST \
+            -H "Content-Type: application/json; charset=UTF-8" \
+            "$WEBHOOK_URL" \
+            -d "$PAYLOAD"

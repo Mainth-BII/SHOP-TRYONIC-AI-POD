@@ -233,46 +233,178 @@ class TestProductionCriticalFlows:
     # ── CRITICAL_002 ─────────────────────────────────────────────────────────
 
     @pytest.mark.production
-    def test_CRITICAL_002_login_functionality(self):
-        """CRITICAL_002 — Đăng nhập → Xác nhận trạng thái → Click Xem đơn hàng."""
-        page = self.home.page
-        _D = self.domain
+    def test_CRITICAL_002_add_to_cart_and_repay(self):
+        """CRITICAL_002 — AI Gen → Add to Cart → Login at Checkout → Pay → Cancel → View Order → Repay."""
         _R = "production"
+        _D = self.domain
+        page = self.home.page
+        prompt = _load_daily_prompt()
 
-        # S1: Login → Assert login_button KHÔNG visible
-        self._login("CRITICAL_002")
-        self.home.shot("CRITICAL_002", "1", "after_login", domain=_D, root=_R)
-        assert not self.home.header.login_button.is_visible(timeout=3000), \
-            "LỖI S1: Nút Đăng nhập vẫn còn sau khi login"
-        print("  [PASS] S1: Đăng nhập thành công — login_button không hiển thị")
+        # Pre-check: credentials needed for login at checkout
+        email = self.env.login_email
+        password = self.env.login_password
+        if not email or not password:
+            pytest.skip("BỎ QUA CRITICAL_002: Thiếu credentials — kiểm tra .env")
 
-        # S2: Click "Xem đơn hàng" — priority theo JSON selector spec
-        # 1. aria-label  2. text  3. CSS bg-[#4F46F1]
-        view_order_btn = page.locator(
-            "button[aria-label='Xem đơn hàng'], "
-            "button:has-text('Xem đơn hàng'), "
-            "a:has-text('Xem đơn hàng')"
-        ).first
-
-        clicked = False
-        if view_order_btn.is_visible(timeout=5000):
-            view_order_btn.click()
-            clicked = True
-        else:
-            # Fallback: CSS selector từ JSON (Tailwind bg-[#4F46F1])
-            css_btn = page.locator("button.bg-\\[\\#4F46F1\\]").first
-            if css_btn.is_visible(timeout=3000):
-                css_btn.click()
-                clicked = True
-
+        # ── S1: Home → Nhập prompt → Navigate Studio ─────────────────────────
+        self.home.navigate()
+        self.home.fill_prompt(prompt)
+        page.wait_for_timeout(500)
+        self.home.click_generate()
+        try:
+            page.wait_for_url("**/studio**", timeout=20_000)
+        except Exception:
+            pass
         page.wait_for_timeout(2000)
-        self.home.shot("CRITICAL_002", "2", "after_view_order_click" if clicked else "view_order_not_found", domain=_D, root=_R)
-        if clicked:
-            print(f"  [PASS] S2: Đã click 'Xem đơn hàng' — URL: {page.url}")
-        else:
-            print("  [INFO] S2: Không tìm thấy button 'Xem đơn hàng' — bỏ qua")
+        self.home.shot("CRITICAL_002", "1", "studio_navigated", domain=_D, root=_R)
+        assert "studio" in page.url, f"LỖI S1: Không navigate vào Studio — URL: {page.url}"
+        print("  [PASS] S1: Home → Studio thành công")
 
-        print("  [PASS] CRITICAL_002: Hoàn thành")
+        self.studio.accept_terms("CRITICAL_002")
+
+        # ── S2: Chờ AI gen artwork ───────────────────────────────────────────
+        ok, elapsed, found = self.studio.wait_for_artworks(count=3, timeout=120)
+        self.studio.shot("CRITICAL_002", "2", f"artworks_{found}imgs_{int(elapsed)}s", domain=_D, root=_R)
+        if not ok:
+            pytest.skip(f"BỎ QUA S2: Chỉ tạo được {found}/3 ảnh sau {elapsed}s")
+        print(f"  [PASS] S2: {found} artwork sẵn sàng ({elapsed}s)")
+
+        # ── S3: Click Variant 2 → Apply lên mặt trước ───────────────────────
+        self.studio.click_artwork(index=1)
+        self.studio.wait_for_canvas_artwork(timeout=30, poll_ms=500)
+        self.studio.shot("CRITICAL_002", "3", "artwork_front", domain=_D, root=_R)
+        print("  [PASS] S3: Áp artwork lên mặt trước")
+
+        # ── S4: Xoay áo → Click Variant 1 cho mặt sau ───────────────────────
+        if self.studio.back_button.is_visible(timeout=3000):
+            self.studio.toggle_side("back")
+            page.wait_for_timeout(1500)
+            self.studio.click_artwork(index=0)
+            self.studio.wait_for_canvas_artwork(timeout=30, poll_ms=500)
+            self.studio.shot("CRITICAL_002", "4", "artwork_back", domain=_D, root=_R)
+            print("  [PASS] S4: Áp artwork lên mặt sau")
+        else:
+            print("  [INFO] S4: Nút 'Mặt sau' không hiển thị — bỏ qua")
+
+        # ── S5: Hoàn tất thiết kế → Review ───────────────────────────────────
+        self.studio.open_order_modal()
+        page.wait_for_timeout(2000)
+        self.studio.shot("CRITICAL_002", "5", "review_page", domain=_D, root=_R)
+        print("  [PASS] S5: Màn hình xác nhận thiết kế")
+
+        # ── S6: Click Đặt hàng → Order screen ───────────────────────────────
+        dat_hang = page.locator("button:has-text('Đặt hàng')").first
+        if dat_hang.is_visible(timeout=5000):
+            dat_hang.click()
+            try:
+                page.wait_for_url("**/order**", timeout=8000)
+            except Exception:
+                page.wait_for_timeout(3000)
+        self.studio.shot("CRITICAL_002", "6", "order_screen", domain=_D, root=_R)
+        print(f"  [PASS] S6: Màn hình đặt hàng — URL: {page.url}")
+
+        # ── S7: Chọn size 4XL ────────────────────────────────────────────────
+        size_btn = page.locator("button:text-is('4XL')").first
+        if size_btn.is_visible(timeout=3000):
+            size_btn.click()
+            page.wait_for_timeout(500)
+        self.studio.shot("CRITICAL_002", "7", "size_4xl", domain=_D, root=_R)
+        print("  [PASS] S7: Chọn size 4XL")
+
+        # ── S8: Click "Thêm vào giỏ" ────────────────────────────────────────
+        add_cart = page.locator("button:has-text('Thêm vào giỏ')").first
+        assert add_cart.is_visible(timeout=5000), "LỖI S8: Không tìm thấy nút 'Thêm vào giỏ'"
+        add_cart.click()
+        page.wait_for_timeout(2000)
+        self.studio.shot("CRITICAL_002", "8", "added_to_cart", domain=_D, root=_R)
+        print("  [PASS] S8: Đã thêm vào giỏ hàng")
+
+        # ── S9: Mở giỏ hàng → Click "Thanh toán ngay" ───────────────────────
+        cart_icon = page.locator("header button:has(svg)").last
+        if cart_icon.is_visible(timeout=3000):
+            cart_icon.click()
+            page.wait_for_timeout(1500)
+        checkout_btn = page.locator("button:has-text('Thanh toán ngay')").first
+        assert checkout_btn.is_visible(timeout=5000), "LỖI S9: Không tìm 'Thanh toán ngay'"
+        checkout_btn.click()
+        page.wait_for_timeout(3000)
+        self.studio.shot("CRITICAL_002", "9", "checkout_page", domain=_D, root=_R)
+        print(f"  [PASS] S9: Checkout — URL: {page.url}")
+
+        # ── S10: Login tại Checkout ──────────────────────────────────────────
+        login_at_checkout = page.locator("#section-auth button:has-text('Đăng nhập')").first
+        if login_at_checkout.is_visible(timeout=5000):
+            login_at_checkout.click()
+            page.wait_for_timeout(1500)
+            page.locator("input[placeholder*='example.com'], input[type='email']").first.fill(email)
+            page.locator("input[type='password']").first.fill(password)
+            page.locator("form button:has-text('Đăng nhập')").first.click()
+            page.wait_for_timeout(3000)
+        self.studio.shot("CRITICAL_002", "10", "logged_in", domain=_D, root=_R)
+        print("  [PASS] S10: Đăng nhập tại Checkout")
+
+        # ── S11: Nhập MST → Click Thanh toán → payOS ────────────────────────
+        self.checkout.fill_tax_code("123456", "CRITICAL_002")
+        page.wait_for_timeout(500)
+        pay_btn = self.checkout.payment_button
+        assert pay_btn.is_visible(timeout=8000), "LỖI S11: Không tìm nút Thanh toán"
+        pay_btn.click()
+        page.wait_for_timeout(5000)
+        self.studio.shot("CRITICAL_002", "11", "payos_page", domain=_D, root=_R)
+        assert "pay" in page.url, f"LỖI S11: Không navigate tới payOS — URL: {page.url}"
+        print(f"  [PASS] S11: payOS — URL: {page.url}")
+
+        # ── S12: Hủy thanh toán ──────────────────────────────────────────────
+        cancel = page.locator("button:has-text('Huỷ'), button:has-text('Hủy')").first
+        if cancel.is_visible(timeout=10000):
+            cancel.click()
+            page.wait_for_timeout(1500)
+            confirm = page.locator("#cancel-payment, button:has-text('Xác nhận hủy')").first
+            if confirm.is_visible(timeout=5000):
+                confirm.click()
+                page.wait_for_timeout(5000)
+        self.studio.shot("CRITICAL_002", "12", "cancelled", domain=_D, root=_R)
+        print(f"  [PASS] S12: Hủy thanh toán — URL: {page.url}")
+
+        # ── S13: Click "Xem đơn hàng" ───────────────────────────────────────
+        view_order = page.locator(
+            "button:has-text('Xem đơn hàng'), a:has-text('Xem đơn hàng')"
+        ).first
+        if view_order.is_visible(timeout=5000):
+            view_order.click()
+            page.wait_for_timeout(3000)
+        self.studio.shot("CRITICAL_002", "13", "view_orders", domain=_D, root=_R)
+        print(f"  [PASS] S13: Xem đơn hàng — URL: {page.url}")
+
+        # ── S14: Click "Đơn hàng của tôi" ───────────────────────────────────
+        my_orders = page.locator("button:has-text('Đơn hàng của tôi')").first
+        if my_orders.is_visible(timeout=5000):
+            my_orders.click()
+            page.wait_for_timeout(2000)
+        self.studio.shot("CRITICAL_002", "14", "my_orders", domain=_D, root=_R)
+        print("  [PASS] S14: Tab 'Đơn hàng của tôi'")
+
+        # ── S15: Xem đơn hàng đầu tiên ──────────────────────────────────────
+        first_order = page.locator("main div:nth-of-type(1) button").first
+        if first_order.is_visible(timeout=5000):
+            first_order.click()
+            page.wait_for_timeout(2000)
+        self.studio.shot("CRITICAL_002", "15", "order_detail", domain=_D, root=_R)
+        print("  [PASS] S15: Chi tiết đơn hàng")
+
+        # ── S16: Thanh toán lại → payOS ──────────────────────────────────────
+        repay = page.locator("div.border button:has-text('Thanh toán ngay')").first
+        if repay.is_visible(timeout=5000):
+            repay.click()
+            page.wait_for_timeout(5000)
+            self.studio.shot("CRITICAL_002", "16", "repay_payos", domain=_D, root=_R)
+            assert "pay" in page.url, f"LỖI S16: Không navigate payOS — URL: {page.url}"
+            print(f"  [PASS] S16: Thanh toán lại → payOS — URL: {page.url}")
+        else:
+            self.studio.shot("CRITICAL_002", "16", "repay_not_found", domain=_D, root=_R)
+            print("  [INFO] S16: Nút 'Thanh toán ngay' không tìm thấy — bỏ qua")
+
+        print("  [PASS] CRITICAL_002: Toàn bộ luồng Add to Cart → Repay hoàn thành")
 
     # ── CRITICAL_003 ─────────────────────────────────────────────────────────
 

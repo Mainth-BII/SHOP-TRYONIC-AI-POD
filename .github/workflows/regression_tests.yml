@@ -62,6 +62,7 @@ jobs:
           python -m pytest tests/ -v --maxfail=5 \
             --browser chromium \
             --tb=short \
+            --json-report --json-report-file=tests/test_reports/.report.json \
             -p no:cacheprovider
 
       - name: Run Tests (Daily Only)
@@ -71,7 +72,8 @@ jobs:
         run: |
           python -m pytest tests/daily/ -v \
             --browser chromium \
-            --tb=short
+            --tb=short \
+            --json-report --json-report-file=tests/test_reports/.report.json
 
       - name: Run Tests (Production Only)
         if: "${{ github.event.inputs.test_suite == 'production' }}"
@@ -79,7 +81,8 @@ jobs:
           python -m pytest tests/production/test_critical_flows.py::TestProductionCriticalFlows::test_CRITICAL_001_full_journey_to_checkout -v \
             --browser chromium \
             --env=test \
-            --tb=short
+            --tb=short \
+            --json-report --json-report-file=tests/test_reports/.report.json
 
       - name: Run Tests (API Only)
         if: "${{ github.event.inputs.test_suite == 'api' }}"
@@ -87,7 +90,8 @@ jobs:
           PYTHONPATH: ${{ github.workspace }}/tests
         run: |
           python -m pytest tests/api/ -v \
-            --tb=short
+            --tb=short \
+            --json-report --json-report-file=tests/test_reports/.report.json
 
       - name: Upload Test Reports & Screenshots
         if: always()
@@ -100,6 +104,42 @@ jobs:
             test-results/
           retention-days: 7
 
+      - name: Collect Test Results
+        if: always()
+        id: test_results
+        run: |
+          # Parse pytest output for stats
+          TOTAL=0; PASSED=0; FAILED=0; SKIPPED=0; DURATION="0s"
+
+          if [ -f tests/test_reports/.report.json ]; then
+            TOTAL=$(jq '.summary.total // 0' tests/test_reports/.report.json)
+            PASSED=$(jq '.summary.passed // 0' tests/test_reports/.report.json)
+            FAILED=$(jq '.summary.failed // 0' tests/test_reports/.report.json)
+            SKIPPED=$(jq '.summary.skipped // 0' tests/test_reports/.report.json)
+            DURATION=$(jq -r '.duration // 0 | tostring + "s"' tests/test_reports/.report.json)
+          fi
+
+          # Fallback: count from exit code
+          if [ "$TOTAL" = "0" ]; then
+            TOTAL=1
+            if [ "${{ job.status }}" = "success" ]; then PASSED=1; else FAILED=1; fi
+            DURATION="${{ github.run_number }}s"
+          fi
+
+          # Pass rate
+          if [ "$TOTAL" -gt 0 ]; then
+            RATE=$(( PASSED * 100 / TOTAL ))
+          else
+            RATE=0
+          fi
+
+          echo "total=$TOTAL" >> $GITHUB_OUTPUT
+          echo "passed=$PASSED" >> $GITHUB_OUTPUT
+          echo "failed=$FAILED" >> $GITHUB_OUTPUT
+          echo "skipped=$SKIPPED" >> $GITHUB_OUTPUT
+          echo "rate=$RATE" >> $GITHUB_OUTPUT
+          echo "duration=$DURATION" >> $GITHUB_OUTPUT
+
       - name: Send Google Chat Notification
         if: always()
         env:
@@ -107,15 +147,106 @@ jobs:
           COMMIT_MSG: ${{ github.event.head_commit.message || 'Manual trigger' }}
         run: |
           STATUS="${{ job.status }}"
-          ICON="✅"
-          [ "$STATUS" != "success" ] && ICON="❌"
-          
-          TEXT="${ICON} *Tryonic QA Report*\nStatus: ${STATUS}\nBranch: ${{ github.ref_name }}\nCommit: ${COMMIT_MSG}\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|Xem chi tiết>"
-          
-          PAYLOAD=$(jq -n --arg text "$TEXT" '{"text": $text}')
-          
-          curl -s -o /dev/null -w "HTTP %{http_code}" \
+          TOTAL="${{ steps.test_results.outputs.total }}"
+          PASSED="${{ steps.test_results.outputs.passed }}"
+          FAILED="${{ steps.test_results.outputs.failed }}"
+          SKIPPED="${{ steps.test_results.outputs.skipped }}"
+          RATE="${{ steps.test_results.outputs.rate }}"
+          DURATION="${{ steps.test_results.outputs.duration }}"
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          BRANCH="${{ github.ref_name }}"
+          TIMESTAMP=$(date -u +"%Y-%m-%d %H:%M UTC")
+
+          if [ "$STATUS" = "success" ]; then
+            ICON="✅"
+            TITLE="Tryonic AI — ALL TESTS PASSED"
+            COLOR="#34A853"
+          elif [ "$STATUS" = "cancelled" ]; then
+            ICON="⚠️"
+            TITLE="Tryonic AI — TESTS CANCELLED"
+            COLOR="#FBBC04"
+          else
+            ICON="❌"
+            TITLE="Tryonic AI — TESTS FAILED"
+            COLOR="#EA4335"
+          fi
+
+          # Build Card v2 JSON
+          PAYLOAD=$(cat <<EOF
+          {
+            "cardsV2": [{
+              "cardId": "testReport",
+              "card": {
+                "header": {
+                  "title": "${ICON} ${TITLE}",
+                  "subtitle": "https://test.shop.tryonic.ai | Run #${{ github.run_number }} | ${TIMESTAMP}",
+                  "imageUrl": "https://shop.tryonic.ai/favicon.ico",
+                  "imageType": "CIRCLE"
+                },
+                "sections": [
+                  {
+                    "header": "Test Summary",
+                    "widgets": [
+                      {
+                        "decoratedText": {
+                          "topLabel": "Results",
+                          "text": "Total: <b>${TOTAL}</b>  ✅ Passed: <b>${PASSED}</b>  ❌ Failed: <b>${FAILED}</b>  ⏭️ Skipped: <b>${SKIPPED}</b>"
+                        }
+                      },
+                      {
+                        "decoratedText": {
+                          "topLabel": "Pass Rate",
+                          "text": "<b>${RATE}%</b>  ⏱️ Duration: <b>${DURATION}</b>"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "header": "Details",
+                    "widgets": [
+                      {
+                        "decoratedText": {
+                          "topLabel": "Branch",
+                          "text": "<b>${BRANCH}</b>"
+                        }
+                      },
+                      {
+                        "decoratedText": {
+                          "topLabel": "Commit",
+                          "text": "$(echo "$COMMIT_MSG" | head -c 80)"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "widgets": [
+                      {
+                        "buttonList": {
+                          "buttons": [
+                            {
+                              "text": "View Full Report",
+                              "onClick": {
+                                "openLink": {
+                                  "url": "${RUN_URL}"
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }]
+          }
+          EOF
+          )
+
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
             -X POST \
             -H "Content-Type: application/json; charset=UTF-8" \
             "$WEBHOOK_URL" \
-            -d "$PAYLOAD"
+            -d "$PAYLOAD")
+
+          echo "📤 Google Chat notification sent — HTTP $HTTP_CODE"

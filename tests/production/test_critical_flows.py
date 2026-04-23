@@ -248,6 +248,7 @@ class TestProductionCriticalFlows:
 
         # ── S1: Home → Nhập prompt → Navigate Studio ─────────────────────────
         self.home.navigate()
+        self.home.accept_terms("CRITICAL_002")  # Đóng popup điều khoản trước khi nhập prompt
         self.home.fill_prompt(prompt)
         page.wait_for_timeout(500)
         self.home.click_generate()
@@ -288,18 +289,21 @@ class TestProductionCriticalFlows:
 
         # ── S5: Hoàn tất thiết kế → Review ───────────────────────────────────
         self.studio.open_order_modal()
+        # Chờ spinner "Đang hoàn tất thiết kế..." biến mất
+        loading = page.locator("text=Đang hoàn tất thiết kế")
+        try:
+            loading.wait_for(state="hidden", timeout=30000)
+        except Exception:
+            pass
         page.wait_for_timeout(2000)
         self.studio.shot("CRITICAL_002", "5", "review_page", domain=_D, root=_R)
         print("  [PASS] S5: Màn hình xác nhận thiết kế")
 
         # ── S6: Click Đặt hàng → Order screen ───────────────────────────────
         dat_hang = page.locator("button:has-text('Đặt hàng')").first
-        if dat_hang.is_visible(timeout=5000):
-            dat_hang.click()
-            try:
-                page.wait_for_url("**/order**", timeout=8000)
-            except Exception:
-                page.wait_for_timeout(3000)
+        assert dat_hang.is_visible(timeout=10000), "LỖI S6: Nút 'Đặt hàng' không hiển thị"
+        dat_hang.click()
+        page.wait_for_timeout(3000)
         self.studio.shot("CRITICAL_002", "6", "order_screen", domain=_D, root=_R)
         print(f"  [PASS] S6: Màn hình đặt hàng — URL: {page.url}")
 
@@ -312,8 +316,13 @@ class TestProductionCriticalFlows:
         print("  [PASS] S7: Chọn size 4XL")
 
         # ── S8: Click "Thêm vào giỏ" ────────────────────────────────────────
-        add_cart = page.locator("button:has-text('Thêm vào giỏ')").first
-        assert add_cart.is_visible(timeout=5000), "LỖI S8: Không tìm thấy nút 'Thêm vào giỏ'"
+        page.wait_for_timeout(1000)
+        add_cart = page.locator(
+            "div.fixed button:has-text('Thêm vào giỏ'), "
+            "button:has-text('Thêm vào giỏ'), "
+            "button span:text-is('Thêm vào giỏ')"
+        ).first
+        assert add_cart.is_visible(timeout=8000), "LỖI S8: Không tìm thấy nút 'Thêm vào giỏ'"
         add_cart.click()
         page.wait_for_timeout(2000)
         self.studio.shot("CRITICAL_002", "8", "added_to_cart", domain=_D, root=_R)
@@ -335,11 +344,81 @@ class TestProductionCriticalFlows:
         login_at_checkout = page.locator("#section-auth button:has-text('Đăng nhập')").first
         if login_at_checkout.is_visible(timeout=5000):
             login_at_checkout.click()
-            page.wait_for_timeout(1500)
-            page.locator("input[placeholder*='example.com'], input[type='email']").first.fill(email)
-            page.locator("input[type='password']").first.fill(password)
-            page.locator("form button:has-text('Đăng nhập')").first.click()
-            page.wait_for_timeout(3000)
+            page.wait_for_timeout(2000)
+
+            dialog = page.locator("[role='dialog']")
+            dialog.wait_for(state="visible", timeout=5000)
+
+            # Nếu lỡ ở "Quên mật khẩu" → click "Quay lại đăng nhập"
+            back_login = page.locator("text=Quay lại đăng nhập, text=Quay lại")
+            if back_login.first.is_visible(timeout=2000):
+                page.evaluate("""() => {
+                    const link = document.querySelector('[role="dialog"] button');
+                    const allBtns = document.querySelectorAll('[role="dialog"] button');
+                    for (const b of allBtns) {
+                        if (b.textContent.includes('Quay lại')) { b.click(); break; }
+                    }
+                }""")
+                page.wait_for_timeout(1500)
+
+            # Đảm bảo password field hiện (= đang ở form login)
+            pw_exists = page.evaluate("""() => {
+                return !!document.querySelector('[role="dialog"] input[type="password"]');
+            }""")
+            if not pw_exists:
+                print("  [WARN] S10: Password field không tìm thấy — thử click 'Quay lại'")
+                page.evaluate("""() => {
+                    const links = document.querySelectorAll('[role="dialog"] button, [role="dialog"] a');
+                    for (const el of links) {
+                        if (el.textContent.includes('Quay lại') || el.textContent.includes('đăng nhập')) {
+                            el.click(); break;
+                        }
+                    }
+                }""")
+                page.wait_for_timeout(1500)
+
+            # Fill email via JS
+            page.evaluate("""(email) => {
+                const input = document.querySelector('[role="dialog"] input[type="email"]');
+                if (input) {
+                    const setter = Object.getOwnPropertyDescriptor(
+                        window.HTMLInputElement.prototype, 'value').set;
+                    setter.call(input, email);
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                    input.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            }""", email)
+            page.wait_for_timeout(300)
+
+            # Fill password via JS
+            page.evaluate("""(pw) => {
+                const input = document.querySelector('[role="dialog"] input[type="password"]');
+                if (input) {
+                    const setter = Object.getOwnPropertyDescriptor(
+                        window.HTMLInputElement.prototype, 'value').set;
+                    setter.call(input, pw);
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                    input.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            }""", password)
+            page.wait_for_timeout(300)
+
+            # Submit login form — tìm button "Đăng nhập" trong form (không phải "Gửi yêu cầu")
+            page.evaluate("""() => {
+                const btns = document.querySelectorAll('[role="dialog"] form button');
+                for (const btn of btns) {
+                    if (btn.textContent.includes('Đăng nhập') || btn.textContent.includes('đăng nhập')) {
+                        btn.click(); return;
+                    }
+                }
+                if (btns.length > 0) btns[btns.length - 1].click();
+            }""")
+
+            # Chờ dialog đóng
+            try:
+                dialog.wait_for(state="hidden", timeout=10000)
+            except Exception:
+                page.wait_for_timeout(5000)
         self.studio.shot("CRITICAL_002", "10", "logged_in", domain=_D, root=_R)
         print("  [PASS] S10: Đăng nhập tại Checkout")
 

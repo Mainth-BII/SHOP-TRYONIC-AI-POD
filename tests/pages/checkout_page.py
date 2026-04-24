@@ -284,6 +284,105 @@ class CheckoutPage(BasePage):
         self.buy_now_button.click()
         self.page.wait_for_timeout(2000)
 
+    # ── Order data capture ────────────────────────────────────────────────────
+
+    def read_price_from_page(self) -> str | None:
+        """Regex \\d+[,.]\\d+\\s*₫ trên document.body.innerText. Trả về match đầu tiên."""
+        try:
+            return self.page.evaluate(r"""() => {
+                const text = document.body.innerText || '';
+                const match = text.match(/\d+[,.]\d+\s*₫/);
+                return match ? match[0] : null;
+            }""")
+        except Exception:
+            return None
+
+    def read_address_from_checkout(self) -> str | None:
+        """Đọc input[name*='address'].value hoặc text từ [class*='address'] section."""
+        try:
+            return self.page.evaluate("""() => {
+                const inp = document.querySelector(
+                    'input[name*="address"], textarea[name*="address"]'
+                );
+                if (inp && inp.value) return inp.value;
+                const section = document.querySelector('[class*="address"]');
+                return section ? section.innerText.trim() : null;
+            }""")
+        except Exception:
+            return None
+
+    def read_order_code(self) -> str | None:
+        """URL param ?orderCode=POD-... fallback regex POD-\\d{8}-\\d+ trong page text."""
+        try:
+            return self.page.evaluate(r"""() => {
+                const params = new URLSearchParams(window.location.search);
+                const fromUrl = params.get('orderCode');
+                if (fromUrl && fromUrl.startsWith('POD-')) return fromUrl;
+                const text = document.body.innerText || '';
+                const match = text.match(/POD-\d{8}-\d+/);
+                return match ? match[0] : null;
+            }""")
+        except Exception:
+            return None
+
+    def read_product_type(self) -> str | None:
+        """Heading h1/h2/h3 chứa keyword áo|shirt|thun (case-insensitive)."""
+        try:
+            return self.page.evaluate(r"""() => {
+                const headings = document.querySelectorAll('h1, h2, h3');
+                for (const h of headings) {
+                    if (/áo|shirt|thun/i.test(h.innerText)) return h.innerText.trim();
+                }
+                return null;
+            }""")
+        except Exception:
+            return None
+
+    def verify_order_data(self, order_data: dict, tc_id: str) -> None:
+        """Verify từng field trong order_data trên trang chi tiết đơn hàng."""
+        import re
+        page_text = self.page.evaluate("() => document.body.innerText || ''")
+
+        # order_code: exact string — FAIL nếu sai
+        order_code = order_data.get("order_code")
+        if order_code:
+            assert order_code in page_text, \
+                f"LỖI verify {tc_id}: Mã đơn '{order_code}' không tìm thấy trong trang chi tiết"
+
+        # size: exact string — FAIL + format warning nếu sai
+        size = order_data.get("size")
+        if size:
+            if size not in page_text:
+                size_variants = [f"Size {size}", f"size {size}", f"SIZE {size}"]
+                found_variant = next((v for v in size_variants if v in page_text), None)
+                if found_variant:
+                    print(f"  ⚠ Format size không nhất quán: captured `{size}`, "
+                          f"page hiện `{found_variant}` — cần đồng nhất")
+                assert False, \
+                    f"LỖI verify {tc_id}: Size '{size}' không tìm thấy trong trang chi tiết"
+
+        # unit_price: digits-only compare — WARN nếu sai
+        unit_price = order_data.get("unit_price")
+        if unit_price:
+            digits_captured = re.sub(r"[^\d]", "", unit_price)
+            page_digits = re.sub(r"[^\d]", "", page_text)
+            if digits_captured and digits_captured not in page_digits:
+                print(f"  [WARN] verify {tc_id}: unit_price mismatch — captured '{unit_price}'")
+
+        # total_price: digits-only compare — WARN nếu sai
+        total_price = order_data.get("total_price")
+        if total_price:
+            digits_captured = re.sub(r"[^\d]", "", total_price)
+            page_digits = re.sub(r"[^\d]", "", page_text)
+            if digits_captured and digits_captured not in page_digits:
+                print(f"  [WARN] verify {tc_id}: total_price mismatch — captured '{total_price}'")
+
+        # address, artwork_front_src, artwork_back_src, product_type: INFO log only
+        for field in ("address", "artwork_front_src", "artwork_back_src", "product_type"):
+            val = order_data.get(field)
+            if val:
+                print(f"  [INFO] verify {tc_id}: {field} = '{str(val)[:80]}'")
+
     # ── AI generation helpers ─────────────────────────────────────────────────
 
     def enter_prompt_and_wait_for_generation(

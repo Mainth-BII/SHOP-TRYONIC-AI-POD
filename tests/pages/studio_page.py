@@ -143,7 +143,10 @@ class StudioPage(BasePage):
             self.front_button.click()
 
     def wait_for_artworks(self, count: int = 3, timeout: int = 120) -> tuple:
-        """Chờ AI tạo đủ `count` ảnh. Trả về (success, elapsed_seconds, found_count)."""
+        """Chờ AI tạo đủ `count` ảnh. Trả về (success, elapsed_seconds, found_count).
+
+        finish_button enabled nhưng found=0 → đợi thêm 1 cycle (DOM chưa render xong).
+        """
         import time
         start = time.time()
         deadline = start + timeout
@@ -151,7 +154,10 @@ class StudioPage(BasePage):
             try:
                 btn = self.finish_button
                 if btn.is_visible() and not btn.is_disabled():
-                    break
+                    found_now = self.artwork_images.count()
+                    if found_now > 0:
+                        break
+                    # Button enabled nhưng DOM chưa render artworks — đợi thêm 1 cycle
             except Exception:
                 pass
             self.page.wait_for_timeout(3000)
@@ -273,4 +279,34 @@ class StudioPage(BasePage):
             return not self.finish_button.is_disabled()
         except Exception:
             return False
+
+    def read_panel_image_src(self, index: int) -> str | None:
+        """Đọc src của artwork tại `index` trong left panel, skip 'Thêm ảnh' card (+1 offset)."""
+        try:
+            return self.page.evaluate(f"""() => {{
+                const imgs = Array.from(document.querySelectorAll('img[src]')).filter(img => {{
+                    const rect = img.getBoundingClientRect();
+                    return rect.left < 330 && rect.width > 30 && rect.height > 30
+                           && img.complete && img.naturalWidth > 0;
+                }});
+                const target = imgs[{index + 1}];  // +1 to skip 'Thêm ảnh'
+                return target ? target.src : null;
+            }}""")
+        except Exception:
+            return None
+
+    def read_library_image_src(self, index: int) -> str | None:
+        """Đọc src của ảnh thư viện tại `index` trong left panel (không skip)."""
+        try:
+            return self.page.evaluate(f"""() => {{
+                const imgs = Array.from(document.querySelectorAll('img[src]')).filter(img => {{
+                    const rect = img.getBoundingClientRect();
+                    return rect.left < 330 && rect.width > 30 && rect.height > 30
+                           && img.complete && img.naturalWidth > 0;
+                }});
+                const target = imgs[{index}];
+                return target ? target.src : null;
+            }}""")
+        except Exception:
+            return None
 

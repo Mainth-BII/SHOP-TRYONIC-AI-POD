@@ -287,26 +287,67 @@ class CheckoutPage(BasePage):
     # ── Order data capture ────────────────────────────────────────────────────
 
     def read_price_from_page(self) -> str | None:
-        """Regex \\d+[,.]\\d+\\s*₫ trên document.body.innerText. Trả về match đầu tiên."""
+        """Match giá VN: 189.000đ, 732.000đ, 810.560₫, ... Trả về match đầu tiên."""
         try:
             return self.page.evaluate(r"""() => {
                 const text = document.body.innerText || '';
-                const match = text.match(/\d+[,.]\d+\s*₫/);
+                const match = text.match(/\d[\d,.]*\d[đ₫]/);
                 return match ? match[0] : null;
             }""")
         except Exception:
             return None
 
     def read_address_from_checkout(self) -> str | None:
-        """Đọc input[name*='address'].value hoặc text từ [class*='address'] section."""
+        """Đọc địa chỉ nhận hàng — chờ spinner biến mất trước khi đọc."""
         try:
+            # Chờ "Đang tải địa chỉ" biến mất (tối đa 8s)
+            try:
+                self.page.wait_for_function(
+                    "() => !document.body.innerText.includes('Đang tải địa chỉ')",
+                    timeout=8000
+                )
+            except Exception:
+                pass
             return self.page.evaluate("""() => {
-                const inp = document.querySelector(
+                const skipLine = (l) =>
+                    !l || l.length < 3
+                    || l.includes('_')                      // snake_case codes
+                    || /^[a-zA-Z]+$/.test(l)               // pure ASCII word (codes)
+                    || l === 'Địa chỉ nhận hàng'
+                    || l.includes('Đang tải');
+
+                // 1. Input/textarea với value trông như địa chỉ thực
+                const inps = document.querySelectorAll(
                     'input[name*="address"], textarea[name*="address"]'
                 );
-                if (inp && inp.value) return inp.value;
-                const section = document.querySelector('[class*="address"]');
-                return section ? section.innerText.trim() : null;
+                for (const inp of inps) {
+                    const v = (inp.value || '').trim();
+                    if (v.length > 10 && v.includes(' ') && !v.includes('_')) return v;
+                }
+                // 2. Section "Địa chỉ nhận hàng": lọc dòng code, giữ text VN thực
+                const all = Array.from(document.querySelectorAll('*'));
+                for (const el of all) {
+                    const t = (el.innerText || '').trim();
+                    if (t === 'Địa chỉ nhận hàng' || t.startsWith('Địa chỉ nhận hàng')) {
+                        const card = el.closest('div, section, article');
+                        if (card) {
+                            const lines = card.innerText.split('\\n')
+                                .map(l => l.trim())
+                                .filter(l => !skipLine(l));
+                            const content = lines.join(', ').trim();
+                            if (content.length > 5) return content.slice(0, 200);
+                        }
+                    }
+                }
+                // 3. Fallback: [class*="address"] section
+                const section = document.querySelector('[class*="address"], [class*="Address"]');
+                if (section) {
+                    const lines = section.innerText.split('\\n')
+                        .map(l => l.trim()).filter(l => !skipLine(l));
+                    const content = lines.join(', ').trim();
+                    if (content) return content.slice(0, 200);
+                }
+                return null;
             }""")
         except Exception:
             return None

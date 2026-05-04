@@ -32,6 +32,14 @@ def _load_guest_info() -> dict:
     with open(data_path, "r", encoding="utf-8") as f:
         return json.load(f)["guest_checkout"]
 
+def _load_tc_data(tc_id: str) -> dict:
+    data_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+        "data", "critical_flows.json"
+    )
+    with open(data_path, "r", encoding="utf-8") as f:
+        return json.load(f)[tc_id]
+
 
 class TestProductionCriticalFlows:
 
@@ -98,7 +106,8 @@ class TestProductionCriticalFlows:
         prompt = _load_daily_prompt()
         guest = _load_guest_info()
         print(f"\n  [INFO] CRITICAL_001: Prompt hôm nay = '{prompt[:60]}...'")
-        order_data = {"color": "Trắng", "size": "M"}
+        tc_data = _load_tc_data("CRITICAL_001")
+        order_data = {"color": tc_data["color"], "size": tc_data["size"]}
 
         # ── S0: Đăng nhập ────────────────────────────────────────────────────
         self._login("CRITICAL_001")
@@ -136,7 +145,7 @@ class TestProductionCriticalFlows:
         print(f"  [PASS] S2: {found} artwork sẵn sàng ({elapsed}s)")
 
         # ── S3: Studio — Chọn màu áo trắng ──────────────────────────────────
-        selected = self.studio.select_color("Trắng")
+        selected = self.studio.select_color(tc_data["color"])
         if not selected:
             selected = self.studio.select_color("White")
         page.wait_for_timeout(800)
@@ -144,8 +153,9 @@ class TestProductionCriticalFlows:
         print(f"  [{'PASS' if selected else 'INFO'}] S3: Chọn màu trắng {'thành công' if selected else '— không tìm thấy, bỏ qua'}")
 
         # ── S4: Studio — Click ảnh đầu tiên để áp lên áo ────────────────────
-        order_data["artwork_front_src"] = self.studio.read_panel_image_src(0)
-        applied = self.studio.click_artwork(index=0)
+        idx_front = tc_data["artwork_index_front"]
+        order_data["artwork_front_src"] = self.studio.read_panel_image_src(idx_front)
+        applied = self.studio.click_artwork(index=idx_front)
         assert applied, (
             f"LỖI S4: Không click được artwork trong library panel — URL: {page.url}"
         )
@@ -161,10 +171,11 @@ class TestProductionCriticalFlows:
             self.studio.shot("CRITICAL_001", "7", "shirt_back_view", domain=_D, root=_R)
             print("  [PASS] S5a: Đã click 'Xoay áo' — xem mặt sau")
 
-            # Library đã mở sẵn ở sidebar trái — click ảnh index=2 (khác với ảnh mặt trước)
+            # Library đã mở sẵn ở sidebar trái — click ảnh khác với ảnh mặt trước
+            idx_back = tc_data["artwork_index_back"]
             page.wait_for_timeout(1000)
-            lib_ok = self.studio.click_library_image(index=2)
-            order_data["artwork_back_src"] = self.studio.read_library_image_src(2)
+            lib_ok = self.studio.click_library_image(index=idx_back)
+            order_data["artwork_back_src"] = self.studio.read_library_image_src(idx_back)
             # Chờ canvas render ảnh lên mặt sau áo (4s)
             page.wait_for_timeout(4000)
             self.studio.shot("CRITICAL_001", "8", "library_image_on_back", domain=_D, root=_R)
@@ -225,7 +236,7 @@ class TestProductionCriticalFlows:
 
         # ── S8: Checkout — Điền MST → Click Thanh toán → Assert QR ─────────────
         # User đã đăng nhập → địa chỉ auto-fill, chỉ cần điền CCCD/MST bắt buộc
-        tax_ok = self.checkout.fill_tax_code("012345", "CRITICAL_001")
+        tax_ok = self.checkout.fill_tax_code(tc_data["tax_code"], "CRITICAL_001")
         page.wait_for_timeout(500)
         self.studio.shot("CRITICAL_001", "13", "tax_code_filled", domain=_D, root=_R)
         assert tax_ok, f"LỖI S8a: Không điền được Mã số thuế — URL: {page.url}"
@@ -304,7 +315,8 @@ class TestProductionCriticalFlows:
         _D = self.domain
         page = self.home.page
         prompt = _load_daily_prompt()
-        order_data = {"size": "4XL"}
+        tc_data = _load_tc_data("CRITICAL_002")
+        order_data = {"size": tc_data["size"]}
 
         # Pre-check: credentials needed for login at checkout
         email = self.env.login_email
@@ -337,8 +349,9 @@ class TestProductionCriticalFlows:
         print(f"  [PASS] S2: {found} artwork sẵn sàng ({elapsed}s)")
 
         # ── S3: Click Variant 2 → Apply lên mặt trước ───────────────────────
-        order_data["artwork_front_src"] = self.studio.read_panel_image_src(1)
-        applied_s3 = self.studio.click_artwork(index=1)
+        idx_front = tc_data["artwork_index_front"]
+        order_data["artwork_front_src"] = self.studio.read_panel_image_src(idx_front)
+        applied_s3 = self.studio.click_artwork(index=idx_front)
         assert applied_s3, f"LỖI S3: Không click được artwork trong library panel — URL: {page.url}"
         canvas_wait_s3 = self.studio.wait_for_canvas_artwork(timeout=30, poll_ms=500)
         wait_msg_s3 = f"{canvas_wait_s3}s" if canvas_wait_s3 >= 0 else "không detect được (canvas/WebGL render)"
@@ -346,11 +359,12 @@ class TestProductionCriticalFlows:
         print(f"  [PASS] S3: Đã click artwork mặt trước — canvas detect: {wait_msg_s3}")
 
         # ── S4: Xoay áo → Click Variant 1 cho mặt sau ───────────────────────
-        order_data["artwork_back_src"] = self.studio.read_panel_image_src(0)
+        idx_back = tc_data["artwork_index_back"]
+        order_data["artwork_back_src"] = self.studio.read_panel_image_src(idx_back)
         if self.studio.back_button.is_visible(timeout=3000):
             self.studio.toggle_side("back")
             page.wait_for_timeout(1500)
-            self.studio.click_artwork(index=0)
+            self.studio.click_artwork(index=idx_back)
             self.studio.wait_for_canvas_artwork(timeout=30, poll_ms=500)
             self.studio.shot("CRITICAL_002", "4", "artwork_back", domain=_D, root=_R)
             print("  [PASS] S4: Áp artwork lên mặt sau")
@@ -385,8 +399,8 @@ class TestProductionCriticalFlows:
         order_data["product_type"] = self.checkout.read_product_type()
         order_data["unit_price"] = self.checkout.read_price_from_page()
 
-        # ── S7: Chọn size 4XL ────────────────────────────────────────────────
-        size_btn = page.locator("button:text-is('4XL')").first
+        # ── S7: Chọn size ────────────────────────────────────────────────────
+        size_btn = page.locator(f"button:text-is('{tc_data['size']}')").first
         if size_btn.is_visible(timeout=3000):
             size_btn.click()
             page.wait_for_timeout(500)
@@ -511,7 +525,7 @@ class TestProductionCriticalFlows:
         print("  [PASS] S10: Đăng nhập tại Checkout thành công")
 
         # ── S11: Nhập MST → Click Thanh toán → payOS ────────────────────────
-        self.checkout.fill_tax_code("123456", "CRITICAL_002")
+        self.checkout.fill_tax_code(tc_data["tax_code"], "CRITICAL_002")
         page.wait_for_timeout(500)
         pay_btn = self.checkout.payment_button
         assert pay_btn.is_visible(timeout=8000), "LỖI S11: Không tìm nút Thanh toán"

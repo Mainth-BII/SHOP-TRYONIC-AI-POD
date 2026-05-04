@@ -1,0 +1,15 @@
+{
+  "CRITICAL_001": {
+    "color": "Trắng",
+    "size": "M",
+    "tax_code": "012345",
+    "artwork_index_front": 0,
+    "artwork_index_back": 2
+  },
+  "CRITICAL_002": {
+    "size": "4XL",
+    "tax_code": "123456",
+    "artwork_index_front": 1,
+    "artwork_index_back": 0
+  }
+}

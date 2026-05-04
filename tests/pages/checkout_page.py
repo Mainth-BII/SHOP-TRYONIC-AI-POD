@@ -424,6 +424,64 @@ class CheckoutPage(BasePage):
             if val:
                 print(f"  [INFO] verify {tc_id}: {field} = '{str(val)[:80]}'")
 
+    def select_color_on_order(self, color_name: str) -> bool:
+        """Chọn màu áo trên order screen. Trả về True nếu thành công."""
+        try:
+            btn = self.page.locator(f"button:has-text('{color_name}')").first
+            if btn.is_visible(timeout=2000):
+                btn.click()
+                self.page.wait_for_timeout(500)
+                return True
+            btn = self.page.locator(
+                f"button[aria-label*='{color_name}'], button[title*='{color_name}'], "
+                f"[data-color*='{color_name}']"
+            ).first
+            if btn.is_visible(timeout=2000):
+                btn.click()
+                self.page.wait_for_timeout(500)
+                return True
+            if color_name.lower() in ("trắng", "trang", "white"):
+                btn = self.page.locator(
+                    "button[style*='#fff'], button[style*='white'], "
+                    "[data-color='white'], [data-color='#ffffff'], "
+                    "button[style*='rgb(255, 255, 255)']"
+                ).first
+                if btn.is_visible(timeout=2000):
+                    btn.click()
+                    self.page.wait_for_timeout(500)
+                    return True
+        except Exception:
+            pass
+        return False
+
+    def select_size_by_name(self, size_name: str) -> bool:
+        """Chọn size bất kỳ theo tên trên order screen. Trả về True nếu thành công."""
+        try:
+            btn = self.page.locator(f"button:text-is('{size_name}')").first
+            if btn.is_visible(timeout=3000):
+                btn.click()
+                self.page.wait_for_timeout(500)
+                return True
+            btn = self.page.locator(
+                f"[data-size='{size_name}'], label:text-is('{size_name}')"
+            ).first
+            if btn.is_visible(timeout=2000):
+                btn.click()
+                self.page.wait_for_timeout(500)
+                return True
+        except Exception:
+            pass
+        return False
+
+    def read_unit_price_as_int(self) -> int | None:
+        """Đọc unit price trên order screen, parse ra số nguyên (VNĐ)."""
+        raw = self.read_price_from_page()
+        if not raw:
+            return None
+        import re
+        digits = re.sub(r"[^\d]", "", raw)
+        return int(digits) if digits else None
+
     # ── AI generation helpers ─────────────────────────────────────────────────
 
     def enter_prompt_and_wait_for_generation(

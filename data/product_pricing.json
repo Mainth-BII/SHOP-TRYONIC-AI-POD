@@ -30,6 +30,7 @@
       "name": "Áo Phông Cá Tính",
       "shop_name": "Áo Phông Cá Tính (là áo Phương Thảo)",
       "material": "215gsm",
+      "studio_url": "/studio?category=t-shirts",
       "variants": [
         {
           "id": "PT01_XS_S_2XL_3XL",
@@ -39,7 +40,9 @@
           "costPrice": 90000,
           "originalPrice": 227000,
           "salePrice": 189000,
-          "salePriceWithVAT": 204120
+          "salePriceWithVAT": 204120,
+          "test_colors": ["Trắng"],
+          "test_sizes": ["S", "2XL"]
         },
         {
           "id": "PT01_M_L_XL",
@@ -49,7 +52,9 @@
           "costPrice": 100000,
           "originalPrice": 227000,
           "salePrice": 189000,
-          "salePriceWithVAT": 204120
+          "salePriceWithVAT": 204120,
+          "test_colors": ["Trắng"],
+          "test_sizes": ["M", "L", "XL"]
         }
       ]
     },
@@ -59,6 +64,7 @@
       "name": "Áo Phông Nặng Đông",
       "material": "210gsm",
       "extra_material": "100% COTT",
+      "studio_url": "/studio?category=t-shirts",
       "variants": [
         {
           "id": "M21_TRANG",
@@ -68,7 +74,9 @@
           "costPrice": 55000,
           "originalPrice": 143000,
           "salePrice": 119000,
-          "salePriceWithVAT": 128520
+          "salePriceWithVAT": 128520,
+          "test_colors": ["Trắng"],
+          "test_sizes": ["M"]
         },
         {
           "id": "M21_MAU",
@@ -78,7 +86,9 @@
           "costPrice": 59000,
           "originalPrice": 154000,
           "salePrice": 128000,
-          "salePriceWithVAT": 138240
+          "salePriceWithVAT": 138240,
+          "test_colors": ["Đen"],
+          "test_sizes": ["M"]
         }
       ]
     },
@@ -87,6 +97,7 @@
       "code": "M22",
       "name": "Áo Phông Cơ Bản",
       "material": "230gsm",
+      "studio_url": "/studio?category=t-shirts",
       "variants": [
         {
           "id": "M22_TRANG",
@@ -96,7 +107,9 @@
           "costPrice": 61000,
           "originalPrice": 159000,
           "salePrice": 132000,
-          "salePriceWithVAT": 142560
+          "salePriceWithVAT": 142560,
+          "test_colors": ["Trắng"],
+          "test_sizes": ["M"]
         },
         {
           "id": "M22_MAU",
@@ -106,7 +119,9 @@
           "costPrice": 64000,
           "originalPrice": 167000,
           "salePrice": 139000,
-          "salePriceWithVAT": 150120
+          "salePriceWithVAT": 150120,
+          "test_colors": ["Đen"],
+          "test_sizes": ["M"]
         }
       ]
     },
@@ -115,6 +130,7 @@
       "code": "ET002",
       "name": "Áo Phông Trẻ Em",
       "material": "185gsm",
+      "studio_url": "/studio?category=t-shirts",
       "variants": [
         {
           "id": "ET002_100_140",
@@ -125,7 +141,9 @@
           "costPrice": 40000,
           "originalPrice": 105000,
           "salePrice": 87000,
-          "salePriceWithVAT": 93960
+          "salePriceWithVAT": 93960,
+          "test_colors": ["Trắng"],
+          "test_sizes": ["110", "130"]
         },
         {
           "id": "ET002_150_160",
@@ -136,7 +154,9 @@
           "costPrice": 42000,
           "originalPrice": 110000,
           "salePrice": 91000,
-          "salePriceWithVAT": 98280
+          "salePriceWithVAT": 98280,
+          "test_colors": ["Trắng"],
+          "test_sizes": ["150", "160"]
         }
       ]
     }

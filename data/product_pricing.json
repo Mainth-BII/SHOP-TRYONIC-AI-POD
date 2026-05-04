@@ -1,0 +1,200 @@
+{
+  "_note": "Dữ liệu từ bảng giá nội bộ. Công thức: displayed_price = (salePrice_ao + salePrice_in) × (1 + VAT_rate). Giá đơn vị: VNĐ.",
+
+  "global": {
+    "VAT_rate": 0.08,
+    "margin_ao": 1.00,
+    "margin_in": 0.20,
+    "discount_rate": 0.20
+  },
+
+  "print_sale_prices": {
+    "_note": "Giá bán dịch vụ in (có margin 20%), chưa VAT. Áp dụng chung cho mọi loại áo.",
+    "PET": {
+      "10x10cm":  4000,
+      "42x15cm": 13000,
+      "42x30cm": 20000,
+      "50x70cm": 35000
+    },
+    "DTG": {
+      "10x10cm": 11000,
+      "42x15cm": 24000,
+      "42x30cm": 37000,
+      "50x70cm": 59000
+    }
+  },
+
+  "products": [
+    {
+      "code": "PT01",
+      "name": "Áo Phông Cá Tính",
+      "shop_name": "Áo Phông Cá Tính (là áo Phương Thảo)",
+      "material": "215gsm",
+      "variants": [
+        {
+          "id": "PT01_XS_S_2XL_3XL",
+          "label": "XS / S / 2XL / 3XL",
+          "sizes": ["XS", "S", "2XL", "3XL"],
+          "color": "all",
+          "costPrice": 90000,
+          "originalPrice": 227000,
+          "salePrice": 189000,
+          "salePriceWithVAT": 204120
+        },
+        {
+          "id": "PT01_M_L_XL",
+          "label": "M / L / XL",
+          "sizes": ["M", "L", "XL"],
+          "color": "all",
+          "costPrice": 100000,
+          "originalPrice": 227000,
+          "salePrice": 189000,
+          "salePriceWithVAT": 204120
+        }
+      ]
+    },
+
+    {
+      "code": "M21",
+      "name": "Áo Phông Nặng Đông",
+      "material": "210gsm",
+      "extra_material": "100% COTT",
+      "variants": [
+        {
+          "id": "M21_TRANG",
+          "label": "Màu Trắng",
+          "color": "TRẮNG",
+          "sizes": ["XS", "S", "M", "L", "XL", "2XL", "3XL"],
+          "costPrice": 55000,
+          "originalPrice": 143000,
+          "salePrice": 119000,
+          "salePriceWithVAT": 128520
+        },
+        {
+          "id": "M21_MAU",
+          "label": "Màu (non-trắng)",
+          "color": "MÀU",
+          "sizes": ["XS", "S", "M", "L", "XL", "2XL", "3XL"],
+          "costPrice": 59000,
+          "originalPrice": 154000,
+          "salePrice": 128000,
+          "salePriceWithVAT": 138240
+        }
+      ]
+    },
+
+    {
+      "code": "M22",
+      "name": "Áo Phông Cơ Bản",
+      "material": "230gsm",
+      "variants": [
+        {
+          "id": "M22_TRANG",
+          "label": "Màu Trắng",
+          "color": "TRẮNG",
+          "sizes": ["XS", "S", "M", "L", "XL", "2XL", "3XL"],
+          "costPrice": 61000,
+          "originalPrice": 159000,
+          "salePrice": 132000,
+          "salePriceWithVAT": 142560
+        },
+        {
+          "id": "M22_MAU",
+          "label": "Màu (non-trắng)",
+          "color": "MÀU",
+          "sizes": ["XS", "S", "M", "L", "XL", "2XL", "3XL"],
+          "costPrice": 64000,
+          "originalPrice": 167000,
+          "salePrice": 139000,
+          "salePriceWithVAT": 150120
+        }
+      ]
+    },
+
+    {
+      "code": "ET002",
+      "name": "Áo Phông Trẻ Em",
+      "material": "185gsm",
+      "variants": [
+        {
+          "id": "ET002_100_140",
+          "label": "Size 100–140",
+          "size_range": "100-140",
+          "sizes": ["100", "110", "120", "130", "140"],
+          "color": "all",
+          "costPrice": 40000,
+          "originalPrice": 105000,
+          "salePrice": 87000,
+          "salePriceWithVAT": 93960
+        },
+        {
+          "id": "ET002_150_160",
+          "label": "Size 150–160",
+          "size_range": "150-160",
+          "sizes": ["150", "160"],
+          "color": "all",
+          "costPrice": 42000,
+          "originalPrice": 110000,
+          "salePrice": 91000,
+          "salePriceWithVAT": 98280
+        }
+      ]
+    }
+  ],
+
+  "expected_total_prices": {
+    "_note": "Bảng tra nhanh: total = (salePrice_ao + salePrice_in) × 1.08, làm tròn xuống hàng đơn vị. Key = '<product_variant_id>+<method>_<size>'.",
+    "PT01+PET_10x10cm":  208440,
+    "PT01+PET_42x15cm":  218160,
+    "PT01+PET_42x30cm":  225720,
+    "PT01+PET_50x70cm":  241920,
+    "PT01+DTG_10x10cm":  216000,
+    "PT01+DTG_42x15cm":  230040,
+    "PT01+DTG_42x30cm":  244080,
+    "PT01+DTG_50x70cm":  267840,
+    "M21_TRANG+PET_10x10cm":  132840,
+    "M21_TRANG+PET_42x15cm":  142560,
+    "M21_TRANG+PET_42x30cm":  150120,
+    "M21_TRANG+PET_50x70cm":  166320,
+    "M21_TRANG+DTG_10x10cm":  140400,
+    "M21_TRANG+DTG_42x15cm":  154440,
+    "M21_TRANG+DTG_42x30cm":  168480,
+    "M21_TRANG+DTG_50x70cm":  192240,
+    "M21_MAU+PET_10x10cm":   142560,
+    "M21_MAU+PET_42x15cm":   152280,
+    "M21_MAU+PET_42x30cm":   159840,
+    "M21_MAU+PET_50x70cm":   176040,
+    "M21_MAU+DTG_10x10cm":   150120,
+    "M21_MAU+DTG_42x15cm":   164160,
+    "M21_MAU+DTG_42x30cm":   178200,
+    "M21_MAU+DTG_50x70cm":   201960,
+    "M22_TRANG+PET_10x10cm": 146880,
+    "M22_TRANG+PET_42x15cm": 156600,
+    "M22_TRANG+PET_42x30cm": 164160,
+    "M22_TRANG+PET_50x70cm": 180360,
+    "M22_TRANG+DTG_10x10cm": 154440,
+    "M22_TRANG+DTG_42x15cm": 168480,
+    "M22_TRANG+DTG_42x30cm": 182520,
+    "M22_TRANG+DTG_50x70cm": 206280,
+    "M22_MAU+PET_10x10cm":   154440,
+    "M22_MAU+PET_42x15cm":   164160,
+    "M22_MAU+PET_42x30cm":   171720,
+    "M22_MAU+PET_50x70cm":   187920,
+    "M22_MAU+DTG_10x10cm":   162000,
+    "M22_MAU+DTG_42x15cm":   176040,
+    "M22_MAU+DTG_42x30cm":   190080,
+    "M22_MAU+DTG_50x70cm":   213840,
+    "ET002_100_140+PET_10x10cm":  98280,
+    "ET002_100_140+PET_42x15cm": 108000,
+    "ET002_100_140+PET_42x30cm": 115560,
+    "ET002_100_140+DTG_10x10cm": 105840,
+    "ET002_100_140+DTG_42x15cm": 119880,
+    "ET002_100_140+DTG_42x30cm": 133920,
+    "ET002_150_160+PET_10x10cm": 102600,
+    "ET002_150_160+PET_42x15cm": 112320,
+    "ET002_150_160+PET_42x30cm": 119880,
+    "ET002_150_160+DTG_10x10cm": 110160,
+    "ET002_150_160+DTG_42x15cm": 124200,
+    "ET002_150_160+DTG_42x30cm": 138240
+  }
+}

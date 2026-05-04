@@ -28,6 +28,8 @@ class Environment:
     admin_url: str
     login_email: str = ""
     login_password: str = ""
+    admin_email: str = ""        # ← thêm
+    admin_password: str = ""     # ← thêm
 
     def __str__(self) -> str:
         email_hint = f" | LOGIN={self.login_email}" if self.login_email else ""
@@ -47,6 +49,8 @@ TEST = Environment(
     admin_url="https://admin.test.shop.tryonic.ai",
     login_email=os.getenv("DAILY_TEST_EMAIL", ""),
     login_password=os.getenv("DAILY_TEST_PASSWORD", ""),
+    admin_email=os.getenv("ADMIN_EMAIL", ""),
+    admin_password=os.getenv("ADMIN_PASSWORD", ""),
 )
 
 PROD = Environment(
@@ -56,6 +60,8 @@ PROD = Environment(
     admin_url="https://admin.shop.tryonic.ai",
     login_email=os.getenv("PROD_EMAIL", ""),
     login_password=os.getenv("PROD_PASSWORD", ""),
+    admin_email=os.getenv("ADMIN_EMAIL", ""),
+    admin_password=os.getenv("ADMIN_PASSWORD", ""),
 )
 
 # ── Lookup ────────────────────────────────────────────────────────────────────

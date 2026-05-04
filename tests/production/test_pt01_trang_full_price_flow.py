@@ -1012,15 +1012,22 @@ class TestPT01TrangFullPriceFlow:
 
                     self._shot("MH10_1", "admin_order_list")
 
-                    # ── Bước 3: Click vào row chứa order_code ────────────
-                    order_row = self.page.locator(
-                        f"tr:has-text('{order_code}'), "
-                        f"[data-order-code='{order_code}'], "
-                        f"a:has-text('{order_code}')"
+                    # ── Bước 3: Click button order_code để vào detail ────
+                    # Admin dùng <button> (không phải <a>) cho order row click
+                    order_link = self.page.locator(
+                        f"button:has-text('{order_code}')"
                     ).first
                     clicked_order = False
-                    if order_row.is_visible(timeout=5000):
-                        order_row.click()
+                    if order_link.is_visible(timeout=5000):
+                        current_url = self.page.url
+                        order_link.click()
+                        # SPA route — wait for URL change then settle
+                        try:
+                            self.page.wait_for_url(
+                                lambda url: url != current_url, timeout=10_000
+                            )
+                        except Exception:
+                            pass
                         self.page.wait_for_load_state("domcontentloaded", timeout=15_000)
                         self.page.wait_for_timeout(2000)
                         clicked_order = True
@@ -1053,21 +1060,35 @@ class TestPT01TrangFullPriceFlow:
                                     result["thanh_toan"] = kw
                                     break
 
-                            for line in lines:
-                                if _re.search(r'Áo Phông|áo phông|T-Shirt|t-shirt', line, _re.I):
-                                    result["ten_sp"] = line
-                                    break
-
-                            m = _re.search(r'(Trắng|Đen|Xanh|Đỏ|Hồng|Vàng|Xám|Nâu|Cam|Tím)', text, _re.I)
-                            result["mau"] = m.group(1) if m else ""
-
-                            m = _re.search(r'\b([XSML23456789XL]+)\b.*?\bx\s*(\d+)\b', text, _re.I)
+                            # Admin detail shows "ProductName (Màu, Size) × Qty"
+                            # e.g. "Áo Phông Cá Tính (Trắng, L) × 1"
+                            m = _re.search(r'^([^\n(]+?)\s+\([^)]+\)\s*[×x]\s*\d+', text, _re.MULTILINE)
                             if m:
-                                result["size"] = m.group(1)
-                                result["qty"] = int(m.group(2))
+                                result["ten_sp"] = m.group(1).strip()
                             else:
-                                m = _re.search(r'\b([XSML23456789XL]+)\b', text)
-                                result["size"] = m.group(1) if m else ""
+                                # fallback: first line with "Áo Phông" (not "T-Shirt" which is footer)
+                                for line in lines:
+                                    if _re.search(r'Áo Phông|áo phông', line, _re.I):
+                                        result["ten_sp"] = line
+                                        break
+
+                            # Admin Chi tiết giá: "ProductName (Màu, Size) × Qty"
+                            # e.g. "Áo Phông Cá Tính (Trắng, L) × 1 → 189,000đ"
+                            _COLORS = r'Trắng|Đen|Xanh|Đỏ|Hồng|Vàng|Xám|Nâu|Cam|Tím'
+                            m = _re.search(
+                                rf'\(({_COLORS}),\s*([A-Z0-9]+)\)\s*[×x]\s*(\d+)',
+                                text, _re.I
+                            )
+                            if m:
+                                result["mau"]  = m.group(1)
+                                result["size"] = m.group(2).upper()
+                                result["qty"]  = int(m.group(3))
+                            else:
+                                # Fallback: "Màu / Size" on variant line
+                                mc = _re.search(rf'({_COLORS})', text, _re.I)
+                                result["mau"] = mc.group(1) if mc else ""
+                                ms = _re.search(r'\b(XS|S|M|L|XL|2XL|3XL)\b', text, _re.I)
+                                result["size"] = ms.group(1).upper() if ms else ""
                                 result["qty"] = None
 
                             m = _re.search(r'[\w.+-]+@[\w-]+\.[a-zA-Z]{2,}', text)

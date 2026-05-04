@@ -12,8 +12,10 @@ import os
 
 # Load .env TRƯỚC khi định nghĩa constants (os.getenv dùng ngay bên dưới)
 try:
+    from pathlib import Path
     from dotenv import load_dotenv
-    load_dotenv(override=False)
+    _dotenv_path = Path(__file__).resolve().parent.parent.parent / ".env"
+    load_dotenv(dotenv_path=_dotenv_path, override=False)
 except ImportError:
     pass
 from dataclasses import dataclass

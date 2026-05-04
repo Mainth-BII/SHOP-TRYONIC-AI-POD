@@ -11,5 +11,40 @@
     "tax_code": "123456",
     "artwork_index_front": 1,
     "artwork_index_back": 0
-  }
+  },
+  "artwork_scenarios": [
+    {
+      "id": "ARTWORK_001",
+      "description": "Chỉ áp artwork mặt trước (front only)",
+      "apply_front": true,
+      "apply_back": false,
+      "artwork_index_front": 0,
+      "artwork_index_back": null,
+      "color": "Trắng",
+      "size": "M",
+      "tax_code": "012345"
+    },
+    {
+      "id": "ARTWORK_002",
+      "description": "Chỉ áp artwork mặt sau (back only)",
+      "apply_front": false,
+      "apply_back": true,
+      "artwork_index_front": null,
+      "artwork_index_back": 1,
+      "color": "Trắng",
+      "size": "M",
+      "tax_code": "012345"
+    },
+    {
+      "id": "ARTWORK_003",
+      "description": "Áp artwork cả 2 mặt (both sides)",
+      "apply_front": true,
+      "apply_back": true,
+      "artwork_index_front": 0,
+      "artwork_index_back": 2,
+      "color": "Trắng",
+      "size": "M",
+      "tax_code": "012345"
+    }
+  ]
 }

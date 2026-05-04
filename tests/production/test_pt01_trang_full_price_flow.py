@@ -325,7 +325,7 @@ class TestPT01TrangFullPriceFlow:
 
     @pytest.mark.production
     def test_full_price_flow_mua_ngay(self):
-        """PT01 Trắng — full flow qua MH1→MH9 qua luồng Mua ngay."""
+        """PT01 Trắng — full flow qua MH1→MH10 (MH10 = Admin verify đơn hàng)."""
         tc = self.tc
 
         # ── Login ────────────────────────────────────────────────────────────
@@ -658,6 +658,7 @@ class TestPT01TrangFullPriceFlow:
         print(f"\n  ── MH6: QR Code ──────────────────────────────────────────")
         self._shot("MH6_1", "qr_screen")
         qr_visible = self.checkout.is_qr_visible(timeout=10000)
+        order_code = ""  # sẽ được ghi đè nếu qr_visible và URL chứa orderCode
 
         if qr_visible:
             qr_amount      = self.checkout.read_qr_amount()
@@ -945,6 +946,270 @@ class TestPT01TrangFullPriceFlow:
             print(f"  [WARN] MH9: Không click được nút Chi tiết — URL: {self.page.url}")
 
         print(f"\n  [PASS] {tc}: MH1→MH9 (luồng Mua ngay) PASSED")
+
+        # ════════════════════════════════════════════════════════════════════
+        # MH10 — Admin: verify đơn hàng trên Admin panel
+        # ════════════════════════════════════════════════════════════════════
+        print(f"\n  ── MH10: Admin — Verify đơn hàng ────────────────────────")
+        try:
+            admin_email    = self.env.admin_email
+            admin_password = self.env.admin_password
+            admin_url      = self.env.admin_url
+
+            if not admin_email or not admin_password:
+                self._record_check("MH10", "MH10 Admin login", "⚠️ WARN",
+                                   "Thiếu credentials", "ADMIN_EMAIL / ADMIN_PASSWORD trong .env")
+                print(f"  [WARN] MH10: Thiếu ADMIN_EMAIL/ADMIN_PASSWORD — bỏ qua MH10")
+            elif not order_code:
+                self._record_check("MH10", "MH10 Admin — tìm đơn", "⚠️ WARN",
+                                   "order_code rỗng", "orderCode từ URL MH6")
+                print(f"  [WARN] MH10: Không có order_code — bỏ qua MH10")
+            else:
+                # ── Bước 1: Navigate admin và login ──────────────────────
+                self.page.goto(admin_url, wait_until="domcontentloaded", timeout=30_000)
+                self.page.wait_for_timeout(2000)
+
+                email_input = self.page.locator(
+                    "input[type='email'], input[name='email'], input[placeholder*='mail' i]"
+                ).first
+                if email_input.is_visible(timeout=5000):
+                    email_input.fill(admin_email)
+                    self.page.locator(
+                        "input[type='password'], input[name='password']"
+                    ).first.fill(admin_password)
+                    self.page.locator(
+                        "button[type='submit'], button:has-text('Đăng nhập'), button:has-text('Login')"
+                    ).first.click()
+                    self.page.wait_for_load_state("domcontentloaded", timeout=15_000)
+                    self.page.wait_for_timeout(2000)
+
+                still_login = self.page.locator(
+                    "input[type='email'], input[type='password']"
+                ).first.is_visible(timeout=3000)
+                if still_login:
+                    self._record_check("MH10", "MH10 Admin login", "⚠️ WARN",
+                                       "Login thất bại", "Vẫn còn form login")
+                    print(f"  [WARN] MH10: Admin login thất bại — bỏ qua verify")
+                else:
+                    self._record_check("MH10", "MH10 Admin login", "✅ PASS",
+                                       "OK", "Đăng nhập thành công")
+                    print(f"  [PASS] MH10: Admin login OK")
+
+                    # ── Bước 2: Navigate trang đơn hàng + search ─────────
+                    orders_url = admin_url.rstrip("/") + "/orders"
+                    self.page.goto(orders_url, wait_until="domcontentloaded", timeout=30_000)
+                    self.page.wait_for_timeout(2000)
+
+                    search_box = self.page.locator(
+                        "input[placeholder*='tìm' i], input[placeholder*='Mã' i], "
+                        "input[placeholder*='search' i], input[placeholder*='đơn' i], "
+                        "input[type='search']"
+                    ).first
+                    if search_box.is_visible(timeout=5000):
+                        search_box.fill(order_code)
+                        search_box.press("Enter")
+                        self.page.wait_for_timeout(2000)
+
+                    self._shot("MH10_1", "admin_order_list")
+
+                    # ── Bước 3: Click vào row chứa order_code ────────────
+                    order_row = self.page.locator(
+                        f"tr:has-text('{order_code}'), "
+                        f"[data-order-code='{order_code}'], "
+                        f"a:has-text('{order_code}')"
+                    ).first
+                    clicked_order = False
+                    if order_row.is_visible(timeout=5000):
+                        order_row.click()
+                        self.page.wait_for_load_state("domcontentloaded", timeout=15_000)
+                        self.page.wait_for_timeout(2000)
+                        clicked_order = True
+                        self._shot("MH10_2", "admin_order_detail")
+                    else:
+                        self._record_check("MH10", "MH10 Admin — tìm đơn", "⚠️ WARN",
+                                           "Không tìm thấy", order_code)
+                        print(f"  [WARN] MH10: Không tìm thấy order {order_code} trên admin")
+
+                    if clicked_order:
+                        # ── Bước 4: Đọc data từ trang detail ─────────────
+                        admin_text = self.page.evaluate("() => document.body.innerText || ''")
+
+                        def _parse_admin(text: str) -> dict:
+                            import re as _re
+                            result = {}
+                            lines = [l.strip() for l in text.split('\n') if l.strip()]
+
+                            m = _re.search(r'(POD-[\w-]+)', text)
+                            result["order_code"] = m.group(1) if m else ""
+
+                            for kw in ["Chờ xác nhận", "Đang xử lý", "Đã xác nhận",
+                                       "Đang giao", "Hoàn thành", "Đã hủy"]:
+                                if kw in text:
+                                    result["trang_thai"] = kw
+                                    break
+
+                            for kw in ["Chưa thanh toán", "Đã thanh toán", "Hoàn tiền"]:
+                                if kw in text:
+                                    result["thanh_toan"] = kw
+                                    break
+
+                            for line in lines:
+                                if _re.search(r'Áo Phông|áo phông|T-Shirt|t-shirt', line, _re.I):
+                                    result["ten_sp"] = line
+                                    break
+
+                            m = _re.search(r'(Trắng|Đen|Xanh|Đỏ|Hồng|Vàng|Xám|Nâu|Cam|Tím)', text, _re.I)
+                            result["mau"] = m.group(1) if m else ""
+
+                            m = _re.search(r'\b([XSML23456789XL]+)\b.*?\bx\s*(\d+)\b', text, _re.I)
+                            if m:
+                                result["size"] = m.group(1)
+                                result["qty"] = int(m.group(2))
+                            else:
+                                m = _re.search(r'\b([XSML23456789XL]+)\b', text)
+                                result["size"] = m.group(1) if m else ""
+                                result["qty"] = None
+
+                            m = _re.search(r'[\w.+-]+@[\w-]+\.[a-zA-Z]{2,}', text)
+                            result["email"] = m.group(0) if m else ""
+
+                            m = _re.search(r'0\d{9,10}', text)
+                            result["phone"] = m.group(0) if m else ""
+
+                            amounts = _re.findall(r'(\d{1,3}(?:[.,]\d{3})+)\s*(?:đ|₫|vnd)?', text, _re.I)
+                            unique_amounts = []
+                            seen = set()
+                            for a in amounts:
+                                val = int(_re.sub(r'[^\d]', '', a))
+                                if val not in seen and val >= 1000:
+                                    seen.add(val)
+                                    unique_amounts.append(val)
+                            result["raw_amounts"] = unique_amounts
+                            return result
+
+                        admin_data = _parse_admin(admin_text)
+                        print(f"  [INFO] MH10: admin_data = {admin_data}")
+
+                        # ── Bước 5: Verify từng field ─────────────────────
+
+                        if admin_data.get("order_code") and order_code in admin_data["order_code"]:
+                            self._record_check("MH10", "MH10 Mã đơn hàng", "✅ PASS",
+                                               admin_data["order_code"], order_code)
+                            print(f"  [PASS] MH10 Mã đơn: '{admin_data['order_code']}'")
+                        else:
+                            self._record_check("MH10", "MH10 Mã đơn hàng", "⚠️ WARN",
+                                               admin_data.get("order_code", "N/A"), order_code)
+                            print(f"  [WARN] MH10: Không đọc được mã đơn")
+
+                        if admin_data.get("trang_thai"):
+                            ok = "xác nhận" in admin_data["trang_thai"].lower()
+                            status = "✅ PASS" if ok else "❌ FAIL"
+                            self._record_check("MH10", "MH10 Trạng thái đơn", status,
+                                               admin_data["trang_thai"], "Chờ xác nhận")
+                            print(f"  [{status}] MH10 Trạng thái: '{admin_data['trang_thai']}'")
+                            assert ok, f"LỖI MH10: Trạng thái sai — expected 'Chờ xác nhận', got '{admin_data['trang_thai']}'"
+                        else:
+                            self._record_check("MH10", "MH10 Trạng thái đơn", "⚠️ WARN",
+                                               "N/A", "Chờ xác nhận")
+                            print(f"  [WARN] MH10: Không đọc được trạng thái đơn")
+
+                        if admin_data.get("thanh_toan"):
+                            ok = "chưa" in admin_data["thanh_toan"].lower()
+                            status = "✅ PASS" if ok else "❌ FAIL"
+                            self._record_check("MH10", "MH10 Trạng thái thanh toán", status,
+                                               admin_data["thanh_toan"], "Chưa thanh toán")
+                            print(f"  [{status}] MH10 Thanh toán: '{admin_data['thanh_toan']}'")
+                            assert ok, f"LỖI MH10: Thanh toán sai — expected 'Chưa thanh toán', got '{admin_data['thanh_toan']}'"
+                        else:
+                            self._record_check("MH10", "MH10 Trạng thái thanh toán", "⚠️ WARN",
+                                               "N/A", "Chưa thanh toán")
+                            print(f"  [WARN] MH10: Không đọc được trạng thái thanh toán")
+
+                        if admin_data.get("ten_sp") and _NAME.lower() in admin_data["ten_sp"].lower():
+                            self._record_check("MH10", "MH10 Tên sản phẩm", "✅ PASS",
+                                               admin_data["ten_sp"], _NAME)
+                            print(f"  [PASS] MH10 Tên SP: '{admin_data['ten_sp']}'")
+                        else:
+                            self._record_check("MH10", "MH10 Tên sản phẩm", "⚠️ WARN",
+                                               admin_data.get("ten_sp", "N/A"), _NAME)
+                            print(f"  [WARN] MH10: Không đọc được tên SP — found: '{admin_data.get('ten_sp', '')}'")
+
+                        if admin_data.get("mau"):
+                            ok = order_info["color"].lower() in admin_data["mau"].lower()
+                            status = "✅ PASS" if ok else "❌ FAIL"
+                            self._record_check("MH10", "MH10 Màu áo", status,
+                                               admin_data["mau"], order_info["color"])
+                            print(f"  [{status}] MH10 Màu: '{admin_data['mau']}'")
+                        else:
+                            self._record_check("MH10", "MH10 Màu áo", "⚠️ WARN",
+                                               "N/A", order_info["color"])
+
+                        if admin_data.get("size"):
+                            ok = order_info["size"].upper() == admin_data["size"].upper()
+                            status = "✅ PASS" if ok else "❌ FAIL"
+                            self._record_check("MH10", "MH10 Size", status,
+                                               admin_data["size"], order_info["size"])
+                            print(f"  [{status}] MH10 Size: '{admin_data['size']}'")
+                        else:
+                            self._record_check("MH10", "MH10 Size", "⚠️ WARN",
+                                               "N/A", order_info["size"])
+
+                        if admin_data.get("qty") is not None:
+                            ok = admin_data["qty"] == order_info["qty"]
+                            status = "✅ PASS" if ok else "❌ FAIL"
+                            self._record_check("MH10", "MH10 Số lượng", status,
+                                               str(admin_data["qty"]), str(order_info["qty"]))
+                            print(f"  [{status}] MH10 Qty: {admin_data['qty']}")
+                        else:
+                            self._record_check("MH10", "MH10 Số lượng", "⚠️ WARN",
+                                               "N/A", str(order_info["qty"]))
+
+                        if admin_data.get("email"):
+                            ok = self.env.login_email.lower() in admin_data["email"].lower()
+                            status = "✅ PASS" if ok else "❌ FAIL"
+                            self._record_check("MH10", "MH10 Email khách hàng", status,
+                                               admin_data["email"], self.env.login_email)
+                            print(f"  [{status}] MH10 Email KH: '{admin_data['email']}'")
+                        else:
+                            self._record_check("MH10", "MH10 Email khách hàng", "⚠️ WARN",
+                                               "N/A", self.env.login_email)
+
+                        if admin_data.get("phone") and order_info.get("phone"):
+                            ok = order_info["phone"] in admin_data["phone"]
+                            status = "✅ PASS" if ok else "❌ FAIL"
+                            self._record_check("MH10", "MH10 SĐT người nhận", status,
+                                               admin_data["phone"], order_info["phone"])
+                            print(f"  [{status}] MH10 SĐT: '{admin_data['phone']}'")
+                        else:
+                            self._record_check("MH10", "MH10 SĐT người nhận", "⚠️ WARN",
+                                               admin_data.get("phone", "N/A"),
+                                               order_info.get("phone", ""))
+
+                        self._record_check("MH10", "MH10 Địa chỉ giao hàng", "ℹ️ INFO",
+                                           "xem screenshot", "")
+                        print(f"  [INFO] MH10 Địa chỉ: xem screenshot MH10_2")
+
+                        self._shot("MH10_3", "admin_order_payment")
+                        raw = admin_data.get("raw_amounts", [])
+
+                        subtotal_found = next((v for v in raw if abs(v - _SALE) <= _TOLERANCE), None)
+                        self._assert_price(subtotal_found, _SALE, "MH10 Subtotal")
+
+                        total_found = next((v for v in raw if abs(v - actual_total_paid) <= _TOLERANCE), None)
+                        self._assert_price(total_found, actual_total_paid, "MH10 Tổng cộng")
+
+                        ship_found = next((v for v in raw if abs(v - _SHIPPING) <= _TOLERANCE), None)
+                        self._assert_price(ship_found, _SHIPPING, "MH10 Phí vận chuyển")
+
+                        print(f"  [PASS] MH10: Admin verify OK")
+
+        except AssertionError:
+            raise
+        except Exception as e:
+            self._record_check("MH10", "MH10 Admin — unexpected error", "⚠️ WARN",
+                               str(e)[:80], "")
+            print(f"  [WARN] MH10: Lỗi không mong đợi — {e}")
+
         self._print_summary_table()
 
     # ── MH10 — Giỏ hàng (flow riêng) ─────────────────────────────────────────

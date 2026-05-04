@@ -49,8 +49,8 @@ TEST = Environment(
     admin_url="https://admin.test.shop.tryonic.ai",
     login_email=os.getenv("DAILY_TEST_EMAIL", ""),
     login_password=os.getenv("DAILY_TEST_PASSWORD", ""),
-    admin_email=os.getenv("ADMIN_EMAIL", ""),
-    admin_password=os.getenv("ADMIN_PASSWORD", ""),
+    admin_email=os.getenv("ADMIN_TEST_EMAIL", ""),
+    admin_password=os.getenv("ADMIN_TEST_PASSWORD", ""),
 )
 
 PROD = Environment(
@@ -60,8 +60,8 @@ PROD = Environment(
     admin_url="https://admin.shop.tryonic.ai",
     login_email=os.getenv("PROD_EMAIL", ""),
     login_password=os.getenv("PROD_PASSWORD", ""),
-    admin_email=os.getenv("ADMIN_EMAIL", ""),
-    admin_password=os.getenv("ADMIN_PASSWORD", ""),
+    admin_email=os.getenv("ADMIN_TEST_EMAIL", ""),
+    admin_password=os.getenv("ADMIN_TEST_PASSWORD", ""),
 )
 
 # ── Lookup ────────────────────────────────────────────────────────────────────

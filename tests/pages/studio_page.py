@@ -137,10 +137,9 @@ class StudioPage(BasePage):
         return False
 
     def toggle_side(self, side: str = "back") -> None:
-        if side.lower() == "back":
-            self.back_button.click()
-        else:
-            self.front_button.click()
+        btn = self.back_button if side.lower() == "back" else self.front_button
+        # force=True để bypass overlay (color swatch có thể che phủ button)
+        btn.click(force=True)
 
     def wait_for_artworks(self, count: int = 3, timeout: int = 120) -> tuple:
         """Chờ AI tạo đủ `count` ảnh. Trả về (success, elapsed_seconds, found_count).

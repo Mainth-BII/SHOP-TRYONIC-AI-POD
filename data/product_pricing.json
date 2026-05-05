@@ -5,7 +5,18 @@
     "VAT_rate": 0.08,
     "margin_ao": 1.00,
     "margin_in": 0.20,
-    "discount_rate": 0.20
+    "discount_rate": 0.20,
+    "product_list_url": "/#products",
+    "shipping_fee": 20000
+  },
+
+  "discount_codes": {
+    "GIAM20": {
+      "label": "Giảm 20%",
+      "type": "percentage",
+      "value": 0.20,
+      "applies_to": "subtotal"
+    }
   },
 
   "print_sale_prices": {
@@ -31,6 +42,12 @@
       "shop_name": "Áo Phông Cá Tính (là áo Phương Thảo)",
       "material": "215gsm",
       "studio_url": "/studio?category=t-shirts",
+      "detail_url": "/product/ao-phong-ca-tinh",
+      "listing_displayed": {
+        "_note": "Giá gạch = max(originalPrice) across variants; Giá sale = min(salePrice) across variants",
+        "original_price": 227000,
+        "sale_price": 189000
+      },
       "variants": [
         {
           "id": "PT01_XS_S_2XL_3XL",
@@ -61,10 +78,16 @@
 
     {
       "code": "M21",
-      "name": "Áo Phông Nặng Đông",
+      "name": "Áo Phông Năng Động",
       "material": "210gsm",
       "extra_material": "100% COTT",
       "studio_url": "/studio?category=t-shirts",
+      "detail_url": "/product/ao-phong-nang-dong",
+      "listing_displayed": {
+        "_note": "Giá gạch = max(originalPrice) across variants; Giá sale = min(salePrice) across variants",
+        "original_price": 154000,
+        "sale_price": 119000
+      },
       "variants": [
         {
           "id": "M21_TRANG",
@@ -98,6 +121,12 @@
       "name": "Áo Phông Cơ Bản",
       "material": "230gsm",
       "studio_url": "/studio?category=t-shirts",
+      "detail_url": "/product/ao-phong-co-ban",
+      "listing_displayed": {
+        "_note": "Giá gạch = max(originalPrice) across variants; Giá sale = min(salePrice) across variants",
+        "original_price": 167000,
+        "sale_price": 132000
+      },
       "variants": [
         {
           "id": "M22_TRANG",
@@ -131,6 +160,12 @@
       "name": "Áo Phông Trẻ Em",
       "material": "185gsm",
       "studio_url": "/studio?category=t-shirts",
+      "detail_url": "/product/ao-phong-tre-em",
+      "listing_displayed": {
+        "_note": "Giá gạch = max(originalPrice) across variants; Giá sale = min(salePrice) across variants",
+        "original_price": 110000,
+        "sale_price": 87000
+      },
       "variants": [
         {
           "id": "ET002_100_140",

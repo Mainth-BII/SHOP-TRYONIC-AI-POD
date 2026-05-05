@@ -482,6 +482,752 @@ class CheckoutPage(BasePage):
         digits = re.sub(r"[^\d]", "", raw)
         return int(digits) if digits else None
 
+    # ── Buy-now modal helpers ──────────────────────────────────────────────────
+
+    def is_buynow_modal_visible(self, timeout: int = 5000) -> bool:
+        """Kiểm tra popup 'Mua ngay' đang hiển thị."""
+        try:
+            modal = self.page.locator(
+                "[role='dialog']:has-text('Thanh toán'), "
+                "[role='dialog']:has-text('Mua ngay'), "
+                "[class*='modal']:has-text('Thanh toán ngay'), "
+                "[class*='drawer']:has-text('Thanh toán')"
+            ).first
+            return modal.is_visible(timeout=timeout)
+        except Exception:
+            return False
+
+    def read_buynow_modal_product_name(self) -> str:
+        """Đọc tên sản phẩm trong popup Mua ngay."""
+        try:
+            return self.page.evaluate(r"""() => {
+                const dialog = document.querySelector(
+                    "[role='dialog'], [class*='modal'], [class*='drawer']"
+                );
+                if (!dialog) return '';
+                const h = dialog.querySelector('h1, h2, h3, [class*="name"], [class*="title"]');
+                return h ? h.innerText.trim() : '';
+            }""") or ""
+        except Exception:
+            return ""
+
+    def read_buynow_modal_price(self) -> int | None:
+        """Đọc đơn giá trong popup Mua ngay."""
+        import re
+        try:
+            raw = self.page.evaluate(r"""() => {
+                const dialog = document.querySelector(
+                    "[role='dialog'], [class*='modal'], [class*='drawer']"
+                );
+                if (!dialog) return null;
+                const els = dialog.querySelectorAll(
+                    "[class*='price'], [class*='Price'], span"
+                );
+                for (const el of els) {
+                    const t = el.innerText || '';
+                    if (/\d[\d,.]*\d[đ₫]/.test(t)) return t;
+                }
+                return null;
+            }""")
+            if raw:
+                digits = re.sub(r"[^\d]", "", raw)
+                return int(digits) if digits else None
+        except Exception:
+            pass
+        return None
+
+    def read_buynow_button_price(self) -> int | None:
+        """Đọc giá trên button 'Thanh toán ngay' trong popup."""
+        import re
+        try:
+            raw = self.page.evaluate(r"""() => {
+                const btns = document.querySelectorAll('button');
+                for (const b of btns) {
+                    const t = b.innerText || '';
+                    if (t.includes('Thanh toán') && /\d[\d,.]*\d[đ₫]/.test(t))
+                        return t;
+                }
+                return null;
+            }""")
+            if raw:
+                m = __import__('re').search(r'\d[\d,.]*\d', raw)
+                if m:
+                    digits = re.sub(r"[^\d]", "", m.group(0))
+                    return int(digits) if digits else None
+        except Exception:
+            pass
+        return None
+
+    def click_thanh_toan_ngay(self) -> bool:
+        """Click 'Thanh toán ngay' trong popup Mua ngay."""
+        try:
+            btn = self.page.locator(
+                "button:has-text('Thanh toán ngay'), button:has-text('Thanh Toan Ngay')"
+            ).first
+            if btn.is_visible(timeout=5000):
+                btn.click()
+                self.page.wait_for_timeout(2000)
+                return True
+        except Exception:
+            pass
+        return False
+
+    # ── Checkout screen price breakdown ───────────────────────────────────────
+
+    def _read_price_label(self, label: str) -> int | None:
+        """Đọc giá trên dòng có label cho trước (regex: label → số tiền).
+        Chỉ match số có 4+ chữ số hoặc định dạng thousands (x,xxx / x.xxx)
+        để tránh match số ngắn trong mã khuyến mãi (vd: GIAM20 → "20")."""
+        import re
+        try:
+            raw = self.page.evaluate(f"""() => {{
+                const text = document.body.innerText || '';
+                const lines = text.split('\\n').map(l => l.trim()).filter(Boolean);
+                // Regex chỉ match số thousands-formatted hoặc 4+ chữ số
+                const priceRe = /(-?\\d{{1,3}}(?:[,.]\\d{{3}})+|-?\\d{{4,}})\\s*[đ₫]?/;
+                for (let i = 0; i < lines.length; i++) {{
+                    if (lines[i].includes('{label}')) {{
+                        let m = lines[i].match(priceRe);
+                        if (m) return m[1];
+                        for (let j = 1; j <= 2; j++) {{
+                            if (i + j < lines.length) {{
+                                let m2 = lines[i+j].match(priceRe);
+                                if (m2) return m2[1];
+                            }}
+                        }}
+                    }}
+                }}
+                return null;
+            }}""")
+            if raw:
+                digits = re.sub(r"[^\d]", "", str(raw))
+                return int(digits) if digits else None
+        except Exception:
+            pass
+        return None
+
+    def read_checkout_subtotal(self) -> int | None:
+        """Đọc 'Tổng tiền' trên checkout."""
+        for label in ("Tổng tiền", "Tổng cộng", "Subtotal"):
+            v = self._read_price_label(label)
+            if v:
+                return v
+        return None
+
+    def read_checkout_vat(self) -> int | None:
+        """Đọc 'Thuế VAT' / 'VAT (8%)' trên checkout."""
+        for label in ("Thuế VAT", "VAT", "Thuế"):
+            v = self._read_price_label(label)
+            if v:
+                return v
+        return None
+
+    def read_checkout_shipping(self) -> int | None:
+        """Đọc 'Phí giao hàng' trên checkout."""
+        for label in ("Phí giao hàng", "Giao hàng", "Shipping"):
+            v = self._read_price_label(label)
+            if v:
+                return v
+        return None
+
+    def read_checkout_discount(self) -> int | None:
+        """Đọc số tiền giảm giá trên checkout."""
+        for label in ("Khuyến mãi", "Giảm giá", "Discount"):
+            v = self._read_price_label(label)
+            if v:
+                return v
+        return None
+
+    def read_checkout_total(self) -> int | None:
+        """Đọc 'Tổng thanh toán' trên checkout — lấy số lớn nhất trên trang."""
+        import re
+        for label in ("Tổng thanh toán", "Tổng TT", "Tổng"):
+            v = self._read_price_label(label)
+            if v:
+                return v
+        # Fallback: lấy số tiền lớn nhất trên trang
+        try:
+            raw_list = self.page.evaluate(r"""() => {
+                const text = document.body.innerText || '';
+                return [...text.matchAll(/\d[\d,.]*\d[đ₫]/g)].map(m => m[0]);
+            }""")
+            candidates = []
+            for r in (raw_list or []):
+                d = re.sub(r"[^\d]", "", r)
+                if d:
+                    candidates.append(int(d))
+            return max(candidates) if candidates else None
+        except Exception:
+            return None
+
+    def read_payment_button_price(self) -> int | None:
+        """Đọc giá trên button 'Thanh toán'."""
+        import re
+        try:
+            raw = self.page.evaluate(r"""() => {
+                const btns = document.querySelectorAll('button');
+                for (const b of btns) {
+                    const t = b.innerText || '';
+                    if ((t.includes('Thanh toán') || t.includes('Đặt hàng'))
+                        && /\d[\d,.]*\d[đ₫]/.test(t))
+                        return t;
+                }
+                return null;
+            }""")
+            if raw:
+                digits = re.sub(r"[^\d]", "", __import__('re').search(r'\d[\d,.]*\d', raw).group(0))
+                return int(digits) if digits else None
+        except Exception:
+            pass
+        return None
+
+    def apply_discount_code(self, code: str) -> bool:
+        """Nhập mã giảm giá và apply. Trả về True nếu thành công."""
+        try:
+            inp = self.page.locator(
+                "input[placeholder*='mã'], input[placeholder*='khuyến'], "
+                "input[placeholder*='discount'], input[name*='coupon'], input[name*='voucher']"
+            ).first
+            if inp.is_visible(timeout=3000):
+                inp.click()
+                inp.fill(code)
+                self.page.wait_for_timeout(300)
+                apply_btn = self.page.locator(
+                    "button:has-text('Áp dụng'), button:has-text('Apply'), "
+                    "button:has-text('Dùng'), button[type='submit']:near(input)"
+                ).first
+                if apply_btn.is_visible(timeout=2000):
+                    apply_btn.click()
+                    self.page.wait_for_timeout(1500)
+                    return True
+                inp.press("Enter")
+                self.page.wait_for_timeout(1500)
+                return True
+        except Exception:
+            pass
+        return False
+
+    def click_checkout_payment(self) -> bool:
+        """Click nút 'Thanh toán' / 'Đặt hàng' cuối checkout."""
+        try:
+            btn = self.page.locator(
+                "button:has-text('Thanh toán'), button:has-text('Đặt hàng'), "
+                "button:has-text('Xác nhận thanh toán'), button:has-text('Hoàn tất')"
+            ).first
+            if btn.is_visible(timeout=5000):
+                btn.click()
+                self.page.wait_for_timeout(3000)
+                return True
+        except Exception:
+            pass
+        return False
+
+    # ── QR screen helpers ─────────────────────────────────────────────────────
+
+    def read_qr_amount(self) -> int | None:
+        """Đọc số tiền trên màn hình QR (Số tiền / Tổng thanh toán)."""
+        import re
+        for label in ("Số tiền", "Tổng thanh toán", "Thanh toán"):
+            v = self._read_price_label(label)
+            if v:
+                return v
+        # Fallback: số tiền trong text lưu ý
+        try:
+            raw = self.page.evaluate(r"""() => {
+                const text = document.body.innerText || '';
+                const m = text.match(/thanh to[áa]n\s+(\d[\d,.]*\d)[đ₫₫]/i);
+                return m ? m[1] : null;
+            }""")
+            if raw:
+                digits = re.sub(r"[^\d]", "", raw)
+                return int(digits) if digits else None
+        except Exception:
+            pass
+        return None
+
+    def read_qr_note_amount(self) -> int | None:
+        """Đọc số tiền trong câu lưu ý 'Nhập chính xác số tiền X'.
+
+        UI mẫu: 'Lưu ý : Nhập chính xác số tiền 183,296, nội dung ...'
+        Số tiền không có ký hiệu đ ngay sau — chỉ có dấu phẩy hoặc khoảng trắng.
+        """
+        import re
+        try:
+            raw = self.page.evaluate(r"""() => {
+                const text = document.body.innerText || '';
+                const m = text.match(/chính xác[^\d]*(\d[\d,.]*\d)/i)
+                        || text.match(/Lưu ý[^:]*:[^\d]*(\d[\d,.]*\d)/i)
+                        || text.match(/(\d[\d,.]*\d)\s*(?:vnd|đ|₫)[^\d]*nội dung/i);
+                return m ? m[1] : null;
+            }""")
+            if raw:
+                digits = re.sub(r"[^\d]", "", raw)
+                return int(digits) if digits else None
+        except Exception:
+            pass
+        return None
+
+    def click_cancel_qr(self) -> bool:
+        """Click 'Huỷ' trên màn hình QR. UI dùng chữ 'Huỷ' (dấu ỷ)."""
+        try:
+            # Text thật trên UI: 'Huỷ' (ỷ) — thử cả 2 variant
+            btn = self.page.locator(
+                "button:has-text('Huỷ'), button:has-text('Hủy'), "
+                "button:has-text('Huy'), button:has-text('Cancel')"
+            ).first
+            if btn.is_visible(timeout=5000):
+                btn.click()
+                self.page.wait_for_timeout(1500)
+                return True
+            # Fallback: JS click bất kỳ button nào chứa 'hu' (case-insensitive)
+            clicked = self.page.evaluate(r"""() => {
+                const btns = document.querySelectorAll('button');
+                for (const b of btns) {
+                    const t = (b.innerText || '').trim().toLowerCase();
+                    if (t === 'huỷ' || t === 'hủy' || t === 'huy' || t === 'cancel') {
+                        b.click();
+                        return true;
+                    }
+                }
+                return false;
+            }""")
+            if clicked:
+                self.page.wait_for_timeout(1500)
+                return True
+        except Exception:
+            pass
+        return False
+
+    def confirm_cancel_dialog(self) -> bool:
+        """Xác nhận hộp thoại confirm hủy — handle cả browser dialog và custom modal."""
+        # 1. Register handler cho browser native dialog (window.confirm)
+        try:
+            self.page.on("dialog", lambda d: d.accept())
+        except Exception:
+            pass
+        # 2. Custom modal confirm button
+        try:
+            confirm_btn = self.page.locator(
+                "button:has-text('Xác nhận'), button:has-text('Đồng ý'), "
+                "button:has-text('OK'), button:has-text('Có'), "
+                "button:has-text('Yes'), button:has-text('Confirm')"
+            ).first
+            if confirm_btn.is_visible(timeout=5000):
+                confirm_btn.click()
+                self.page.wait_for_timeout(2000)
+                return True
+        except Exception:
+            pass
+        self.page.wait_for_timeout(2000)
+        return False
+
+    def click_view_order(self) -> bool:
+        """Click 'Xem đơn hàng' sau khi hủy QR."""
+        try:
+            btn = self.page.locator(
+                "button:has-text('Xem đơn hàng'), a:has-text('Xem đơn hàng'), "
+                "button:has-text('Xem đơn'), a:has-text('Xem đơn')"
+            ).first
+            if btn.is_visible(timeout=5000):
+                btn.click()
+                self.page.wait_for_timeout(2000)
+                return True
+        except Exception:
+            pass
+        return False
+
+    # ── Order page helpers (MH7) ──────────────────────────────────────────────
+
+    def read_order_banner_amount(self) -> int | None:
+        """Đọc số tiền trong banner 'Vui lòng thanh toán Xđ để đơn hàng được xử lý'."""
+        import re
+        try:
+            raw = self.page.evaluate(r"""() => {
+                const text = document.body.innerText || '';
+                const m = text.match(/thanh to[áa]n\s+(\d[\d,.]*\d)[đ₫]/i);
+                return m ? m[0] : null;
+            }""")
+            if raw:
+                digits = re.sub(r"[^\d]", "", __import__('re').search(r'\d[\d,.]*', raw).group(0))
+                return int(digits) if digits else None
+        except Exception:
+            pass
+        return None
+
+    def click_my_orders(self) -> bool:
+        """Click 'Đơn hàng của tôi' → navigate sang trang danh sách đơn hàng."""
+        try:
+            btn = self.page.locator(
+                "button:has-text('Đơn hàng của tôi'), a:has-text('Đơn hàng của tôi'), "
+                "button:has-text('Đơn hàng'), a:has-text('Đơn hàng')"
+            ).first
+            if btn.is_visible(timeout=5000):
+                btn.click()
+                self.page.wait_for_timeout(2000)
+                return True
+        except Exception:
+            pass
+        return False
+
+    # ── My Orders page helpers (MH8) ─────────────────────────────────────────
+
+    def read_first_order_price(self) -> int | None:
+        """Đọc giá 'Tổng: Xđ' của đơn hàng đầu tiên trong danh sách."""
+        import re
+        try:
+            raw = self.page.evaluate(r"""() => {
+                const text = document.body.innerText || '';
+                const lines = text.split('\n');
+                for (const line of lines) {
+                    const trimmed = line.trim();
+                    // Match "Tổng: 183.296đ" hoặc "Tổng 183,296đ"
+                    if (/^Tổng[:\s]/i.test(trimmed) && !/Tổng (tiền|giá|cộng|thanh)/i.test(trimmed)) {
+                        const m = trimmed.match(/[\d,.]+[đ₫]/);
+                        return m ? m[0] : null;
+                    }
+                }
+                return null;
+            }""")
+            if raw:
+                digits = re.sub(r"[^\d]", "", raw)
+                return int(digits) if digits else None
+        except Exception:
+            pass
+        return None
+
+    def click_order_chi_tiet(self, index: int = 0) -> bool:
+        """Click nút 'Chi tiết' của đơn hàng (theo index, default = đầu tiên).
+        UI: Nút 'Chi tiết' mở popup/modal chi tiết đơn hàng."""
+        try:
+            btns = self.page.locator(
+                "button:has-text('Chi tiết'), a:has-text('Chi tiết'), "
+                "button:has-text('Xem chi tiết'), a:has-text('Xem chi tiết')"
+            )
+            btn = btns.nth(index)
+            if btn.is_visible(timeout=5000):
+                btn.click()
+                self.page.wait_for_timeout(2000)
+                return True
+        except Exception:
+            pass
+        return False
+
+    def read_order_detail_total(self) -> int | None:
+        """Đọc 'Tổng cộng: Xđ' trong popup chi tiết đơn hàng (MH9).
+        Cần scroll xuống trong popup để thấy phần THANH TOÁN."""
+        import re
+        try:
+            # Scroll popup modal xuống cuối
+            self._scroll_order_detail_popup()
+
+            # Đọc "Tổng cộng: 183.296đ"
+            raw = self.page.evaluate(r"""() => {
+                const text = document.body.innerText || '';
+                const lines = text.split('\n');
+                for (const line of lines) {
+                    if (/Tổng cộng/i.test(line)) {
+                        const m = line.match(/[\d,.]+[đ₫]/);
+                        return m ? m[0] : null;
+                    }
+                }
+                return null;
+            }""")
+            if raw:
+                digits = re.sub(r"[^\d]", "", raw)
+                return int(digits) if digits else None
+        except Exception:
+            pass
+        return None
+
+    def _scroll_order_detail_popup(self) -> None:
+        """Scroll popup chi tiết đơn hàng xuống cuối để hiển thị phần THANH TOÁN."""
+        self.page.evaluate(r"""() => {
+            const modal = document.querySelector(
+                '[class*="modal"], [class*="dialog"], [class*="drawer"], '
+                + '[class*="popup"], [role="dialog"]'
+            );
+            if (modal) {
+                const scrollable = modal.querySelector('[class*="body"], [class*="content"]')
+                    || modal;
+                scrollable.scrollTop = scrollable.scrollHeight;
+            }
+        }""")
+        self.page.wait_for_timeout(1000)
+
+    def read_order_detail_prices(self) -> dict:
+        """Đọc toàn bộ giá trong phần THANH TOÁN của popup chi tiết đơn hàng.
+
+        Returns dict:
+            tong_gia: int       — Tổng giá (189.000đ)
+            phi_van_chuyen: int — Phí vận chuyển (20.000đ)
+            giam_gia: int       — Giảm giá GIAM20 (37.800đ, dương)
+            thue_vat: int       — Thuế VAT 8% (12.096đ)
+            tong_cong: int      — Tổng cộng (183.296đ)
+        """
+        import re
+        self._scroll_order_detail_popup()
+
+        raw = self.page.evaluate(r"""() => {
+            const text = document.body.innerText || '';
+            const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+            const result = {};
+            const patterns = [
+                { key: 'tong_gia',        regex: /Tổng giá|Tiền hàng|Tiền sản phẩm/i },
+                { key: 'phi_van_chuyen',  regex: /Phí vận chuyển|Phí giao hàng/i },
+                { key: 'giam_gia',        regex: /Giảm giá|Khuyến mãi|Discount/i },
+                { key: 'thue_vat',        regex: /Thuế VAT|VAT/i },
+                { key: 'tong_cong',       regex: /Tổng cộng|Tổng thanh toán|Tổng tiền/i },
+            ];
+            
+            for (const line of lines) {
+                for (const p of patterns) {
+                    if (p.regex.test(line)) {
+                        // Thử tìm số tiền có dấu '-' phía trước (đặc trưng của giảm giá)
+                        let m = line.match(/(-?\d[\d,.]*\d)\s*[đ₫VND]*/i);
+                        
+                        // Nếu là giam_gia, cố gắng tránh lấy số trong mã code (ví dụ 20 trong GIAM20)
+                        if (p.key === 'giam_gia') {
+                            const minusMatch = line.match(/(-\d[\d,.]*\d)\s*[đ₫VND]*/i);
+                            if (minusMatch) {
+                                result[p.key] = minusMatch[1];
+                                continue;
+                            }
+                            // Nếu không có dấu trừ, tìm số có >=3 chữ số (tránh lấy 20 từ GIAM20)
+                            const allNums = line.match(/\d[\d,.]*\d/g) || [];
+                            const filtered = allNums.filter(n => n.replace(/[^\d]/g, '').length > 2);
+                            if (filtered.length > 0) {
+                                result[p.key] = filtered[0];
+                                continue;
+                            }
+                            // Thử tìm trong các dòng tiếp theo (label và value có thể tách dòng)
+                            const idx = lines.indexOf(line);
+                            for (let j = 1; j <= 2; j++) {
+                                if (idx + j < lines.length) {
+                                    const nextMatch = lines[idx + j].match(/(-?\d[\d,.]*\d)\s*[đ₫VND]*/i);
+                                    if (nextMatch && nextMatch[1].replace(/[^\d]/g, '').length > 2) {
+                                        result[p.key] = nextMatch[1];
+                                        break;
+                                    }
+                                }
+                            }
+                            continue;  // tránh fall-through vào generic match bên dưới
+                        }
+
+                        if (m) {
+                            result[p.key] = m[1];
+                        } else {
+                            // Thử tìm trong các dòng tiếp theo (nếu label và value bị tách dòng)
+                            const idx = lines.indexOf(line);
+                            for (let j = 1; j <= 2; j++) {
+                                if (idx + j < lines.length) {
+                                    const nextMatch = lines[idx + j].match(/(-?\d[\d,.]*\d)\s*[đ₫VND]*/i);
+                                    if (nextMatch) {
+                                        result[p.key] = nextMatch[1];
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            return result;
+        }""")
+
+        prices = {}
+        if raw:
+            for key, val in raw.items():
+                if val:
+                    digits = re.sub(r"[^\d]", "", val)
+                    prices[key] = int(digits) if digits else None
+                else:
+                    prices[key] = None
+        return prices
+
+    def read_order_detail_info(self) -> dict:
+        """Đọc thông tin sản phẩm + giao hàng từ popup chi tiết đơn hàng.
+
+        Returns dict:
+            product_name: str   — Tên sản phẩm
+            color: str          — Màu áo
+            size: str           — Size (XS/S/M/L...)
+            qty: int            — Số lượng
+            receiver_name: str  — Tên người nhận
+            phone: str          — SĐT
+            address: str        — Địa chỉ
+        """
+        # Scroll lên đầu popup trước
+        self.page.evaluate(r"""() => {
+            const modal = document.querySelector(
+                '[class*="modal"], [class*="dialog"], [class*="drawer"], '
+                + '[class*="popup"], [role="dialog"]'
+            );
+            if (modal) {
+                const scrollable = modal.querySelector('[class*="body"], [class*="content"]')
+                    || modal;
+                scrollable.scrollTop = 0;
+            }
+        }""")
+        self.page.wait_for_timeout(500)
+
+        raw = self.page.evaluate(r"""() => {
+            const text = document.body.innerText || '';
+            const result = {};
+
+            // Product name — tìm dòng chứa "Áo Phông" hoặc tên SP
+            const nameMatch = text.match(/(Áo [^\n]+)/i);
+            result.product_name = nameMatch ? nameMatch[1].trim() : '';
+
+            // Color — tìm dòng ngay sau tên SP (thường là "Trắng", "Đen"...)
+            const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+            for (let i = 0; i < lines.length; i++) {
+                if (/Áo Phông/i.test(lines[i])) {
+                    // Dòng tiếp theo thường là màu
+                    if (i + 1 < lines.length) {
+                        const nextLine = lines[i + 1];
+                        if (/^(Trắng|Đen|Xanh|Đỏ|Hồng|Vàng|Xám|Nâu|Cam|Tím)/i.test(nextLine)) {
+                            result.color = nextLine;
+                        }
+                    }
+                }
+            }
+
+            // Size + Qty — tìm pattern "L ×1" hoặc "M x1"
+            const sizeQty = text.match(/([XSML234]+)\s*[×x]\s*(\d+)/i);
+            if (sizeQty) {
+                result.size = sizeQty[1];
+                result.qty = parseInt(sizeQty[2]);
+            }
+
+            // THÔNG TIN GIAO HÀNG section
+            const shipSection = text.split(/THÔNG TIN GIAO HÀNG/i)[1] || '';
+            const shipLines = shipSection.split('\n').map(l => l.trim()).filter(Boolean);
+
+            // Tên người nhận — dòng đầu tiên sau header
+            for (const line of shipLines) {
+                if (line.length > 2 && !/^[0-9]/.test(line) && !/Giao/.test(line)
+                    && !/Phường|Quận|Thành|^Q\./.test(line)) {
+                    result.receiver_name = line;
+                    break;
+                }
+            }
+
+            // SĐT — pattern 09/08/07/03/05...
+            const phoneMatch = shipSection.match(/0\d{9,10}/);
+            result.phone = phoneMatch ? phoneMatch[0] : '';
+
+            // Địa chỉ — dòng dài nhất chứa "Phường" hoặc "Quận" hoặc ","
+            for (const line of shipLines) {
+                if (/Phường|Quận|phường|quận|,/.test(line) && line.length > 10) {
+                    result.address = line;
+                    break;
+                }
+            }
+
+            return result;
+        }""")
+
+        return raw or {}
+
+
+    def read_order_detail_product_image(self) -> dict:
+        """Đọc thông tin hình ảnh sản phẩm trong popup chi tiết đơn hàng.
+
+        Returns dict:
+            src: str    — URL ảnh sản phẩm
+            alt: str    — Alt text
+            color_in_url: bool — URL chứa tên màu (trang/den/xanh...)
+        """
+        # Scroll lên đầu popup
+        self.page.evaluate(r"""() => {
+            const modal = document.querySelector(
+                '[class*="modal"], [class*="dialog"], [class*="drawer"], '
+                + '[class*="popup"], [role="dialog"]'
+            );
+            if (modal) {
+                const scrollable = modal.querySelector('[class*="body"], [class*="content"]')
+                    || modal;
+                scrollable.scrollTop = 0;
+            }
+        }""")
+        self.page.wait_for_timeout(500)
+
+        return self.page.evaluate(r"""() => {
+            // Tìm section SẢN PHẨM trong popup
+            const modal = document.querySelector(
+                '[class*="modal"], [class*="dialog"], [class*="drawer"], '
+                + '[class*="popup"], [role="dialog"]'
+            ) || document;
+
+            // Tìm ảnh gần "Áo Phông" hoặc ảnh đầu tiên trong popup
+            const imgs = modal.querySelectorAll('img');
+            let productImg = null;
+
+            for (const img of imgs) {
+                const src = img.src || '';
+                const alt = img.alt || '';
+                // Bỏ qua icon/avatar nhỏ
+                if (img.naturalWidth < 30 || img.naturalHeight < 30) continue;
+                if (/logo|icon|avatar/i.test(src)) continue;
+                // Ưu tiên ảnh chứa "product" hoặc gần text "Áo"
+                if (/product|ao|shirt|phong/i.test(src) || /product|ao|shirt|phong/i.test(alt)) {
+                    productImg = img;
+                    break;
+                }
+                // Lấy ảnh đầu tiên có kích thước hợp lý
+                if (!productImg && (img.width >= 40 || img.height >= 40)) {
+                    productImg = img;
+                }
+            }
+
+            if (!productImg) return { src: '', alt: '', found: false };
+
+            return {
+                src: productImg.src || '',
+                alt: productImg.alt || '',
+                width: productImg.width,
+                height: productImg.height,
+                found: true
+            };
+        }""") or {}
+
+
+
+    # ── Cart page helpers (MH10) ──────────────────────────────────────────────
+
+    def navigate_cart(self) -> None:
+        self.goto("/cart")
+        self.page.wait_for_load_state("domcontentloaded")
+        self.page.wait_for_timeout(1500)
+
+    def read_cart_item_price(self) -> int | None:
+        """Đọc giá item đầu tiên trong giỏ hàng."""
+        import re
+        try:
+            raw = self.page.evaluate(r"""() => {
+                const items = document.querySelectorAll(
+                    "[class*='cart-item'], [class*='cartItem'], [class*='cart'] li"
+                );
+                const first = items[0];
+                if (!first) return null;
+                const m = first.innerText.match(/\d[\d,.]*\d[đ₫]/);
+                return m ? m[0] : null;
+            }""")
+            if raw:
+                digits = re.sub(r"[^\d]", "", raw)
+                return int(digits) if digits else None
+        except Exception:
+            pass
+        return None
+
+    def read_cart_total(self) -> int | None:
+        """Đọc tổng giỏ hàng."""
+        for label in ("Tổng tiền", "Tổng cộng", "Total"):
+            v = self._read_price_label(label)
+            if v:
+                return v
+        return None
+
     # ── AI generation helpers ─────────────────────────────────────────────────
 
     def enter_prompt_and_wait_for_generation(

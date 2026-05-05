@@ -578,15 +578,19 @@ class TestPT01TrangFullPriceFlow:
             return 'unknown';
         }""")
 
-        if error_msg == "applied":
+        # Luôn đọc giá trị giảm từ UI — không phụ thuộc vào error_msg
+        # Nếu UI hiển thị giảm giá → verify phải đúng 20% (_SALE * 20%)
+        # Nếu UI không hiển thị → mã chưa áp dụng, bỏ qua
+        discount_amt = self.checkout.read_checkout_discount()
+        if discount_amt and discount_amt > 0:
             dc_ok = True
-            discount_amt = self.checkout.read_checkout_discount()
-            total_dc = self.checkout.read_checkout_total()
+            # FAIL nếu giá trị giảm ≠ 20% _SALE
             self._assert_price(discount_amt, _DISCOUNT_AMT, "MH5 Giảm giá GIAM20 (20%)")
+            total_dc = self.checkout.read_checkout_total()
             self._assert_price(total_dc, _TOTAL_DC, "MH5 Tổng TT sau GIAM20")
-            print(f"  [PASS] MH5: Áp mã GIAM20 OK")
+            print(f"  [PASS] MH5: Áp mã GIAM20 OK — giảm {discount_amt:,}đ")
         else:
-            print(f"  [WARN] MH5: Mã GIAM20 {error_msg} — bỏ qua verify discount, tiếp tục với giá gốc")
+            print(f"  [INFO] MH5: Mã GIAM20 không áp dụng ({error_msg}) — tiếp tục với giá gốc")
         print(f"  [PASS] MH5: Checkout prices OK")
 
         # Đọc giá THỰC TẾ trên button Thanh toán — dùng làm expected cho MH6→MH9

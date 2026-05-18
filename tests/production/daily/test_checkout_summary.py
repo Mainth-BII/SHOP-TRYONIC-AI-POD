@@ -1,0 +1,229 @@
+"""Daily smoke — Checkout Summary (cart + coupon).
+
+Luồng: PT01 Trắng → Add to cart → Checkout → Apply GIAM20
+→ verify dòng khuyến mãi + tổng sau giảm.
+KHÔNG click Thanh toán.
+"""
+import json
+import os
+
+import pytest
+from playwright.sync_api import Page
+
+from .base_daily_test import BaseDailyTest, parse_int
+
+
+# ── Tham chiếu giá ────────────────────────────────────────────────────────────
+
+def _load_pt01() -> dict:
+    path = os.path.join(
+        os.path.dirname(__file__), "..", "..", "..", "data", "product_pricing.json"
+    )
+    with open(path, encoding="utf-8") as f:
+        data = json.load(f)
+    product = next(p for p in data["products"] if p["code"] == "PT01")
+    # Lấy variant có size M
+    variant = product["variants"][0]
+    for v in product["variants"]:
+        if "M" in v.get("sizes", []):
+            variant = v
+            break
+    sale     = variant["salePrice"]                        # 189,000
+    giam20   = data["discount_codes"]["GIAM20"]["value"]   # 0.20
+    vat_rate = data["global"]["VAT_rate"]                  # 0.08
+    shipping = data["global"]["shipping_fee"]              # 20,000
+    discount = int(sale * giam20)                          # 37,800
+    after    = sale - discount                             # 151,200
+    vat_dc   = int(after * vat_rate)                       # 12,096
+    total_dc = after + vat_dc + shipping                   # 183,296
+    return {
+        "slug":     "ao-phong-ca-tinh",
+        "name":     "Áo Phông Cá Tính",
+        "color":    "Trắng",
+        "size":     "M",
+        "sale":     sale,
+        "discount": discount,
+        "total_dc": total_dc,
+    }
+
+
+_PT01 = _load_pt01()
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _read_discount_line(page: Page) -> int | None:
+    val = page.evaluate(r"""() => {
+        const text = document.body.innerText || '';
+        const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+        for (let i = 0; i < lines.length; i++) {
+            if (/khuyến mãi|giảm giá|discount/i.test(lines[i])) {
+                const nearby = lines.slice(i, i + 3).join(' ');
+                const m = nearby.match(/[−\-]\s*([\d,.]+)\s*[đ₫]/);
+                if (m) return parseInt(m[1].replace(/[^\d]/g, ''));
+            }
+        }
+        return null;
+    }""")
+    return int(val) if val else None
+
+
+def _read_total(page: Page) -> int | None:
+    val = page.evaluate(r"""() => {
+        const text = document.body.innerText || '';
+        const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+        const re = /(\d{1,3}(?:[,.]\d{3})+)/;
+        for (let i = 0; i < lines.length; i++) {
+            if (/Tổng (cộng|thanh toán)/i.test(lines[i])) {
+                const m = lines[i].match(re) || (lines[i+1] || '').match(re);
+                if (m) return parseInt(m[1].replace(/[^\d]/g, ''));
+            }
+        }
+        return null;
+    }""")
+    return int(val) if val else None
+
+
+def _apply_coupon(page: Page, code: str) -> bool:
+    """Xóa mã cũ (nếu có) → nhập mã mới → click Áp dụng."""
+    page.evaluate(r"""() => {
+        const btns = Array.from(document.querySelectorAll('button'));
+        const del = btns.find(b => b.offsetWidth > 0 && (
+            /^[×x✕]$/.test(b.textContent.trim()) ||
+            b.textContent.trim() === 'Xoá' ||
+            b.textContent.trim() === 'Xóa' ||
+            (b.getAttribute('aria-label') || '').toLowerCase().includes('xo')
+        ));
+        if (del) del.click();
+    }""")
+    page.wait_for_timeout(800)
+
+    inp = page.locator(
+        "input[placeholder*='mã khuyến mại'], input[placeholder*='mã giảm giá'], "
+        "input[placeholder*='coupon'], input[placeholder*='promo']"
+    ).first
+    if not inp.is_visible(timeout=5_000):
+        return False
+    inp.click()
+    page.wait_for_timeout(300)
+    inp.fill(code)
+    page.wait_for_timeout(500)
+
+    try:
+        page.wait_for_selector("#btn-apply-promo:not([disabled])", timeout=5_000)
+        page.locator("#btn-apply-promo").click()
+    except Exception:
+        page.evaluate(r"""() => {
+            const btn = document.querySelector('#btn-apply-promo')
+                       || Array.from(document.querySelectorAll('button'))
+                          .find(b => b.textContent.trim() === 'Áp dụng');
+            if (btn) { btn.removeAttribute('disabled'); btn.click(); }
+        }""")
+    page.wait_for_timeout(2_000)
+    return True
+
+
+# ── Test class ────────────────────────────────────────────────────────────────
+
+class TestDailyCheckoutSummary(BaseDailyTest):
+    """Smoke: Cart → Checkout → Apply GIAM20 → verify discount + total (no submit)."""
+
+    _SUITE_NAME   = "checkout_summary"
+    _REPORT_TITLE = "Daily Smoke — Checkout Summary (PT01 + GIAM20)"
+    _results: list = []
+
+    @pytest.fixture(autouse=True)
+    def _setup(self, home_page, product_detail_page, checkout_page, env, page):
+        self.home     = home_page
+        self.detail   = product_detail_page
+        self.checkout = checkout_page
+        self.env      = env
+        self.page     = page
+        self._results = []
+
+    def _login(self) -> None:
+        email, pwd = self.env.login_email, self.env.login_password
+        if not email or not pwd:
+            pytest.skip("Thiếu credentials — set DAILY_TEST_EMAIL / DAILY_TEST_PASSWORD")
+        self.home.navigate()
+        self.home.header.click_login()
+        self.page.wait_for_timeout(1_000)
+        from pages.auth_modal_page import AuthModalPage
+        AuthModalPage(self.page, self.env.fe_url).login(email, pwd)
+        self.page.wait_for_timeout(3_000)
+
+    def test_checkout_with_coupon_giam20(self):
+        """PT01 Trắng M → checkout → GIAM20 → verify discount line + tổng sau giảm."""
+        p = _PT01
+        self._login()
+
+        # Navigate to product
+        self.page.goto(f"{self.env.fe_url}/product/{p['slug']}")
+        self.page.wait_for_load_state("domcontentloaded")
+        self.page.wait_for_timeout(1_500)
+
+        # Select color + size + add to cart
+        try:
+            self.detail.select_color(p["color"])
+            self.page.wait_for_timeout(500)
+        except Exception:
+            pass
+        try:
+            self.checkout.select_size_by_name(p["size"])
+            self.page.wait_for_timeout(500)
+        except Exception:
+            pass
+
+        added = self.detail.click_add_to_cart()
+        self.page.wait_for_timeout(2_000)
+        if not added:
+            pytest.skip("Không click được 'Thêm vào giỏ'")
+
+        # Navigate to cart → proceed to checkout
+        self.checkout.navigate_cart()
+        self.page.wait_for_timeout(1_500)
+        proceed = self.page.locator(
+            "button:has-text('Thanh toán'), a:has-text('Thanh toán')"
+        ).first
+        if proceed.is_visible(timeout=5_000):
+            proceed.click()
+            try:
+                self.page.wait_for_url("**/checkout**", timeout=10_000)
+            except Exception:
+                self.page.wait_for_timeout(3_000)
+        else:
+            self.page.goto(f"{self.env.fe_url}/checkout")
+            self.page.wait_for_timeout(2_000)
+
+        # Verify subtotal trước coupon
+        subtotal_raw = self.page.evaluate(r"""() => {
+            const lines = (document.body.innerText||'').split('\n').map(l=>l.trim()).filter(Boolean);
+            const re = /(\d{1,3}(?:[,.]\d{3})+)/;
+            for (let i = 0; i < lines.length; i++) {
+                if (/^Tổng tiền$/.test(lines[i])) {
+                    const m = (lines[i+1]||'').match(re) || lines[i].match(re);
+                    if (m) return m[1];
+                }
+            }
+            return null;
+        }""")
+        self._assert_price(parse_int(subtotal_raw), p["sale"], "Subtotal trước coupon", "MH1")
+
+        # Apply GIAM20
+        applied = _apply_coupon(self.page, "GIAM20")
+        status_applied = "✅ PASS" if applied else "⚠️ WARN"
+        self._record_check("MH2", "GIAM20 áp dụng", status_applied,
+                           "OK" if applied else "Không tìm thấy ô nhập coupon",
+                           "Coupon applied")
+
+        # Verify discount line
+        discount = _read_discount_line(self.page)
+        self._assert_price(discount, p["discount"], "GIAM20 giảm 20%", "MH2")
+
+        # Verify total after discount — DỪNG Ở ĐÂY, không click Thanh toán
+        total_after = _read_total(self.page)
+        self._assert_price(total_after, p["total_dc"], "Tổng sau GIAM20", "MH3")
+
+        print(f"\n  [INFO] discount={discount}, total_after={total_after}")
+        self.__class__._results = self._results
+        self._save_report()

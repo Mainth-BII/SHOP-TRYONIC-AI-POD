@@ -1,50 +1,6 @@
-{
-  "CRITICAL_001": {
-    "color": "Trắng",
-    "size": "M",
-    "tax_code": "012345",
-    "artwork_index_front": 0,
-    "artwork_index_back": 2
-  },
-  "CRITICAL_002": {
-    "size": "4XL",
-    "tax_code": "123456",
-    "artwork_index_front": 1,
-    "artwork_index_back": 0
-  },
-  "artwork_scenarios": [
-    {
-      "id": "ARTWORK_001",
-      "description": "Chỉ áp artwork mặt trước (front only)",
-      "apply_front": true,
-      "apply_back": false,
-      "artwork_index_front": 0,
-      "artwork_index_back": null,
-      "color": "Trắng",
-      "size": "M",
-      "tax_code": "012345"
-    },
-    {
-      "id": "ARTWORK_002",
-      "description": "Chỉ áp artwork mặt sau (back only)",
-      "apply_front": false,
-      "apply_back": true,
-      "artwork_index_front": null,
-      "artwork_index_back": 1,
-      "color": "Trắng",
-      "size": "M",
-      "tax_code": "012345"
-    },
-    {
-      "id": "ARTWORK_003",
-      "description": "Áp artwork cả 2 mặt (both sides)",
-      "apply_front": true,
-      "apply_back": true,
-      "artwork_index_front": 0,
-      "artwork_index_back": 2,
-      "color": "Trắng",
-      "size": "M",
-      "tax_code": "012345"
-    }
-  ]
-}
+Tôi đã đọc và hiểu cấu trúc dữ liệu từ hai tệp tin bạn cung cấp:
+
+1.  **`studio_data.json`**: Chứa dữ liệu danh mục sản phẩm (Áo thun, Hoodie, Sweatshirt), danh sách các câu lệnh prompt mẫu (Cyberpunk cat, Galaxy wolf, Abstract neon) và thông tin tài khoản thử nghiệm.
+2.  **`critical_flows.json`**: Định nghĩa các kịch bản kiểm thử quan trọng (Critical Flows) và các kịch bản áp dụng artwork (chỉ mặt trước, chỉ mặt sau, hoặc cả hai mặt) kèm theo các thông số về màu sắc, kích thước và mã số thuế.
+
+Tôi đã sẵn sàng thực hiện các bước tiếp theo. Bạn hãy đưa ra yêu cầu cụ thể về việc chỉnh sửa hoặc viết code dựa trên dữ liệu này.

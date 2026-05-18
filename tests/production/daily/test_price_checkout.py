@@ -6,8 +6,6 @@ KHÔNG điền form giao hàng, KHÔNG click Thanh toán.
 """
 import json
 import os
-import re
-
 import pytest
 from playwright.sync_api import Page
 
@@ -78,7 +76,7 @@ def _read_checkout_prices(page: Page) -> dict:
             if (/Phí (vận chuyển|giao hàng)/i.test(l) && !result.shipping) {
                 result.shipping = parse(l) || parse(next);
             }
-            if (/Tổng (cộng|thanh toán)/i.test(l) && !result.total) {
+            if (/Tổng thanh toán/i.test(l) && !result.total) {
                 result.total = parse(l) || parse(next);
             }
         }
@@ -131,22 +129,26 @@ class TestDailyPriceCheckout(BaseDailyTest):
     def test_buynow_checkout_price(self, p: dict):
         """Navigate → Mua ngay → chọn size → Thanh toán ngay → verify checkout."""
         self._login()
-        mh = f"{p['name'][:6]} BuyNow"
+        mh  = f"{p['name'][:6]} BuyNow"
+        sid = f"{p['slug']}_buynow"
 
         self.page.goto(f"{self.env.fe_url}/product/{p['slug']}")
         self.page.wait_for_load_state("domcontentloaded")
         self.page.wait_for_timeout(1_500)
+        self._shot(sid, "1", "product_page")
 
         self.page.locator(
             "button:has-text('Mua ngay'), button:has-text('Mua Ngay')"
         ).first.click()
         self.page.wait_for_timeout(1_500)
+        self._shot(sid, "2", "buynow_popup")
 
         try:
             self.checkout.select_size_by_name(p["test_size"])
             self.page.wait_for_timeout(800)
         except Exception:
             pass
+        self._shot(sid, "3", "size_selected")
 
         self.page.locator(
             "button:has-text('Thanh toán ngay'), button:has-text('Thanh Toán Ngay')"
@@ -157,6 +159,7 @@ class TestDailyPriceCheckout(BaseDailyTest):
             self.page.wait_for_timeout(3_000)
 
         _wait_checkout_prices(self.page)
+        self._shot(sid, "4", "checkout_page")
         prices = _read_checkout_prices(self.page)
         print(f"\n  [INFO] {mh}: prices={prices}")
 
@@ -172,55 +175,62 @@ class TestDailyPriceCheckout(BaseDailyTest):
     def test_cart_checkout_price(self, p: dict):
         """Navigate → Add to cart → Cart page → verify giá item + tổng."""
         self._login()
-        mh = f"{p['name'][:6]} Cart"
+        mh  = f"{p['name'][:6]} Cart"
+        sid = f"{p['slug']}_cart"
 
         self.page.goto(f"{self.env.fe_url}/product/{p['slug']}")
         self.page.wait_for_load_state("domcontentloaded")
         self.page.wait_for_timeout(1_500)
+        self._shot(sid, "1", "product_page")
 
-        try:
-            self.detail.select_color(p["test_color"])
-            self.page.wait_for_timeout(500)
-        except Exception:
-            pass
-        try:
-            self.checkout.select_size_by_name(p["test_size"])
-            self.page.wait_for_timeout(500)
-        except Exception:
-            pass
+        mua_ngay_ok = self.detail.click_mua_ngay()
+        if not mua_ngay_ok:
+            pytest.skip(f"{mh}: Không mở được popup Mua ngay")
+        self.page.wait_for_timeout(1_500)
+        self._shot(sid, "2", "buynow_popup")
 
-        added = self.detail.click_add_to_cart()
+        self.checkout.select_size_by_name(p["test_size"])
+        self.page.wait_for_timeout(800)
+        self._shot(sid, "3", "size_selected")
+
+        added = self.checkout.click_them_vao_gio()
         self.page.wait_for_timeout(2_000)
         if not added:
-            pytest.skip(f"{mh}: Không click được 'Thêm vào giỏ'")
+            pytest.skip(f"{mh}: Không click được 'Thêm vào giỏ' trong popup")
 
-        self.checkout.navigate_cart()
-        self.page.wait_for_timeout(1_500)
+        # Mở cart panel qua header (menu → Giỏ hàng)
+        try:
+            menu_btn = self.page.locator("button:has-text('menu')").first
+            if menu_btn.is_visible(timeout=2_000):
+                menu_btn.click()
+                self.page.wait_for_timeout(600)
+            cart_btn = self.page.locator("button:has-text('Giỏ hàng')").first
+            if cart_btn.is_visible(timeout=3_000):
+                cart_btn.click()
+                self.page.wait_for_timeout(1_500)
+        except Exception:
+            pass
+        self._shot(sid, "4", "cart_panel")
 
-        item_price = self.checkout.read_cart_item_price()
-        cart_total = self.checkout.read_cart_total()
-        self._assert_price(item_price, p["sale"], f"{mh} Giá item trong giỏ", mh)
-        self._assert_price(cart_total, p["sale"], f"{mh} Cart total",          mh)
+        # Đọc tổng từ cart panel
+        cart_total = self.checkout.read_cart_panel_total()
+        self._assert_price(cart_total, p["sale"], f"{mh} Cart total", mh)
 
-        proceed_btn = self.page.locator(
-            "button:has-text('Thanh toán'), button:has-text('Đặt hàng'), "
-            "a:has-text('Thanh toán'), a:has-text('Đặt hàng')"
-        ).first
-        if proceed_btn.is_visible(timeout=5_000):
-            proceed_btn.click()
-            try:
-                self.page.wait_for_url("**/checkout**", timeout=10_000)
-            except Exception:
-                self.page.wait_for_timeout(3_000)
+        # Proceed sang checkout từ panel
+        checkout_ok = self.checkout.click_checkout_from_cart()
+        if not checkout_ok:
+            self.page.goto(f"{self.env.fe_url}/checkout")
+        try:
+            self.page.wait_for_url("**/checkout**", timeout=10_000)
+        except Exception:
+            self.page.wait_for_timeout(3_000)
 
-            _wait_checkout_prices(self.page)
-            prices = _read_checkout_prices(self.page)
-            print(f"\n  [INFO] {mh} checkout: prices={prices}")
+        _wait_checkout_prices(self.page)
+        self._shot(sid, "5", "checkout_page")
+        prices = _read_checkout_prices(self.page)
+        print(f"\n  [INFO] {mh} checkout: prices={prices}")
 
-            self._assert_price(parse_int(prices.get("subtotal")), p["sale"],  f"{mh} Checkout subtotal", mh)
-            self._assert_price(parse_int(prices.get("total")),    p["total"], f"{mh} Checkout total",    mh)
-        else:
-            self._record_check(mh, f"{mh} Checkout total", "⚠️ WARN",
-                               "Không tìm thấy nút proceed to checkout", "")
+        self._assert_price(parse_int(prices.get("subtotal")), p["sale"],  f"{mh} Checkout subtotal", mh)
+        self._assert_price(parse_int(prices.get("total")),    p["total"], f"{mh} Checkout total",    mh)
 
         self.__class__._results.extend(self._results)

@@ -15,8 +15,8 @@ Sau khi tạo đơn hàng qua luồng MH1→MH9, navigate sang Admin panel để
 
 ### .env (thêm 2 biến)
 ```
-ADMIN_EMAIL=<admin account email>
-ADMIN_PASSWORD=<admin account password>
+ADMIN_TEST_EMAIL=<admin account email>
+ADMIN_TESTPASSWORD=<admin account password>
 ```
 
 ### environments.py

@@ -3,6 +3,12 @@ import os
 from datetime import datetime
 import pytest
 
+# Force UTF-8 output on Windows (terminal may default to cp932/cp1252)
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 # Add 'tests/' to front of sys.path so 'config', 'pages', 'utils' are always found
 # Must be before any project imports — use insert(0) for highest priority
 _TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -78,7 +84,10 @@ def pytest_sessionstart(session):
         f"  {login_line}\n"
         "╚══════════════════════════════════════════════════════════════╝"
     )
-    print(banner)
+    try:
+        print(banner)
+    except UnicodeEncodeError:
+        print(banner.encode("ascii", errors="replace").decode("ascii"))
 
 
 # ── Auto-clear screenshots before each session ───────────────────────────────
@@ -91,7 +100,10 @@ def _clear_screenshots() -> None:
     if os.path.exists(shot_dir):
         shutil.rmtree(shot_dir)
     os.makedirs(shot_dir, exist_ok=True)
-    print("\n[INFO] Screenshots cũ đã được xóa. Sẵn sàng chụp mới.")
+    try:
+        print("\n[INFO] Screenshots cũ đã được xóa. Sẵn sàng chụp mới.")
+    except UnicodeEncodeError:
+        print("\n[INFO] Screenshots cleared. Ready for new captures.")
 
 # ── Session-scoped report ────────────────────────────────────────────────────
 
@@ -226,3 +238,15 @@ def auth_page(page: Page, base_url: str) -> _base_page.BasePage:
 def checkout_page(page: Page, base_url: str) -> _base_page.BasePage:
     from pages.checkout_page import CheckoutPage
     return CheckoutPage(page, base_url)
+
+
+@pytest.fixture
+def product_list_page(page: Page, base_url: str) -> _base_page.BasePage:
+    from pages.product_page import ProductListPage
+    return ProductListPage(page, base_url)
+
+
+@pytest.fixture
+def product_detail_page(page: Page, base_url: str) -> _base_page.BasePage:
+    from pages.product_page import ProductDetailPage
+    return ProductDetailPage(page, base_url)

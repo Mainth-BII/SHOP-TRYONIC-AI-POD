@@ -8,9 +8,7 @@ Mỗi test: login → AI gen → order screen → duyệt hết variant (color �
 SKIP guard: nếu URL hiện tại load sản phẩm khác với expected → SKIP với hướng dẫn update studio_url.
 """
 import json
-import math
 import os
-import re
 from datetime import date
 
 import pytest
@@ -18,7 +16,7 @@ import pytest
 
 def _pricing_data() -> dict:
     data_path = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))),
         "data", "product_pricing.json"
     )
     with open(data_path, "r", encoding="utf-8") as f:
@@ -34,7 +32,7 @@ def _load_product(code: str) -> dict:
 
 def _load_daily_prompt() -> str:
     data_path = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))),
         "data", "genz_prompts.json"
     )
     with open(data_path, "r", encoding="utf-8") as f:
@@ -48,11 +46,14 @@ TOLERANCE = 1000  # VNĐ — chấp nhận sai lệch ±1.000đ do làm tròn UI
 class TestPriceVerification:
 
     @pytest.fixture(autouse=True)
-    def setup(self, home_page, studio_page, auth_page, checkout_page, env):
+    def setup(self, home_page, studio_page, auth_page, checkout_page,
+              product_list_page, product_detail_page, env):
         self.home = home_page
         self.studio = studio_page
         self.auth = auth_page
         self.checkout = checkout_page
+        self.listing = product_list_page
+        self.detail = product_detail_page
         self.env = env
         self.domain = "price_verification"
 
@@ -76,16 +77,39 @@ class TestPriceVerification:
         assert is_logged, f"LỖI S0 ({tc_id}): Đăng nhập thất bại"
         print(f"  [PASS] S0 ({tc_id}): Đăng nhập thành công")
 
-    def _navigate_to_order_screen(self, tc_id: str, studio_url: str) -> None:
-        """AI gen → apply artwork → review → order screen."""
+    def _navigate_to_order_screen(self, tc_id: str, product: dict) -> None:
+        """Menu nav → product detail → Thiết kế → AI gen → apply → review → order screen."""
         page = self.home.page
-        prompt = _load_daily_prompt()
         _R = "production"
         _D = self.domain
 
-        # S1: Navigate studio
-        self.home.goto(studio_url)
-        page.wait_for_timeout(3000)
+        # S0.5: Home → Sản phẩm áo → Áo trơn (header menu)
+        self.home.navigate()
+        page.wait_for_timeout(2000)
+        nav_ok = self.home.header.navigate_ao_tron()
+        if nav_ok:
+            print(f"  [PASS] S0.5 ({tc_id}): Vào trang Áo trơn — {page.url}")
+        else:
+            print(f"  [WARN] S0.5 ({tc_id}): Không navigate được qua menu, fallback listing")
+            self.listing.navigate()
+
+        # S0.6: Click nút "Thiết kế" trực tiếp trên card → vào Studio
+        studio_ok = self.listing.click_thiet_ke_on_card(product["name"])
+        if not studio_ok:
+            # Fallback 1: click card → detail → Thiết kế hình in
+            print(f"  [WARN] S0.6 ({tc_id}): Không click Thiết kế trên card, thử qua detail")
+            clicked_card = self.listing.click_product_card(product["name"])
+            if clicked_card:
+                studio_ok = self.detail.click_thiet_ke_hinh_in()
+        if not studio_ok:
+            # Fallback 2: navigate trực tiếp studio URL
+            print(f"  [WARN] S0.6 ({tc_id}): Dùng fallback studio URL")
+            self.home.goto(product["studio_url"])
+            page.wait_for_timeout(3000)
+        else:
+            print(f"  [PASS] S0.6 ({tc_id}): Đã chọn sản phẩm → Studio — {page.url}")
+
+        # S1: Studio loaded
         self.studio.accept_terms(tc_id)
         assert self.studio.is_canvas_visible(), f"LỖI S1 ({tc_id}): Canvas không hiển thị"
         print(f"  [PASS] S1 ({tc_id}): Studio loaded — {page.url}")
@@ -145,11 +169,11 @@ class TestPriceVerification:
         expected = variant["salePrice"]
 
         # Chọn màu
-        color_ok = self.checkout.select_color_on_order(color)
+        self.checkout.select_color_on_order(color)
         page.wait_for_timeout(800)
 
         # Chọn size
-        size_ok = self.checkout.select_size_by_name(size)
+        self.checkout.select_size_by_name(size)
         page.wait_for_timeout(500)
 
         # Chụp
@@ -188,7 +212,7 @@ class TestPriceVerification:
         tc_id = "PRICE_001"
         product = _load_product("PT01")
         self._login(tc_id)
-        self._navigate_to_order_screen(tc_id, product["studio_url"])
+        self._navigate_to_order_screen(tc_id, product)
         self._verify_product_loaded(tc_id, product)
 
         step = 0
@@ -200,15 +224,15 @@ class TestPriceVerification:
 
         print(f"  [PASS] {tc_id}: Kiểm tra {step} tổ hợp color×size — PT01 PASSED")
 
-    # ── PRICE_002: M21 — Áo Phông Nặng Đông ────────────────────────────────
+    # ── PRICE_002: M21 — Áo Phông Năng Động ─────────────────────────────────
 
     @pytest.mark.production
     def test_PRICE_002_M21(self):
-        """PRICE_002 — Áo Phông Nặng Đông: TRẮNG=119k / MÀU=128k trên order screen."""
+        """PRICE_002 — Áo Phông Năng Động: TRẮNG=119k / MÀU=128k trên order screen."""
         tc_id = "PRICE_002"
         product = _load_product("M21")
         self._login(tc_id)
-        self._navigate_to_order_screen(tc_id, product["studio_url"])
+        self._navigate_to_order_screen(tc_id, product)
         self._verify_product_loaded(tc_id, product)
 
         step = 0
@@ -228,7 +252,7 @@ class TestPriceVerification:
         tc_id = "PRICE_003"
         product = _load_product("M22")
         self._login(tc_id)
-        self._navigate_to_order_screen(tc_id, product["studio_url"])
+        self._navigate_to_order_screen(tc_id, product)
         self._verify_product_loaded(tc_id, product)
 
         step = 0
@@ -248,7 +272,7 @@ class TestPriceVerification:
         tc_id = "PRICE_004"
         product = _load_product("ET002")
         self._login(tc_id)
-        self._navigate_to_order_screen(tc_id, product["studio_url"])
+        self._navigate_to_order_screen(tc_id, product)
         self._verify_product_loaded(tc_id, product)
 
         step = 0
@@ -259,3 +283,129 @@ class TestPriceVerification:
                     self._assert_price(tc_id, variant, color, size, str(step + 1))
 
         print(f"  [PASS] {tc_id}: Kiểm tra {step} tổ hợp size — ET002 PASSED")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Listing page price tests — không cần login / AI gen
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestListingPriceVerification:
+    """Verify giá hiển thị trên trang danh sách sản phẩm /#products.
+
+    Quy tắc verify:
+      - Giá gạch (gốc) = max(originalPrice) across all variants
+      - Giá sale       = min(salePrice)     across all variants
+    """
+
+    @pytest.fixture(autouse=True)
+    def setup(self, home_page, product_list_page, env):
+        self.home = home_page
+        self.listing = product_list_page
+        self.env = env
+        self.domain = "listing_price"
+
+    # ── Shared helper ─────────────────────────────────────────────────────────
+
+    def _assert_listing_price(self, tc_id: str, product_code: str) -> None:
+        """Navigate listing → tìm card → assert max(original) và min(sale)."""
+        data = _pricing_data()
+        product = _load_product(product_code)
+        product_name = product["name"]
+
+        # Tính expected từ variants (business rule — không đọc listing_displayed)
+        expected_original = max(v["originalPrice"] for v in product["variants"])
+        expected_sale = min(v["salePrice"] for v in product["variants"])
+
+        # Navigate
+        self.listing.navigate()
+        self.listing.shot(tc_id, "1", "listing_page", domain=self.domain, root="production")
+
+        # Kiểm tra card visible
+        if not self.listing.is_product_card_visible(product_name):
+            pytest.skip(
+                f"SKIP {tc_id}: Không tìm thấy card '{product_name}' "
+                f"tại {data['global']['product_list_url']} — kiểm tra selector"
+            )
+        print(f"  [PASS] {tc_id}: Card '{product_name}' visible")
+
+        # Đọc và assert giá sale (bắt buộc)
+        displayed_sale = self.listing.read_listing_sale_price(product_name)
+        self.listing.shot(tc_id, "2", f"{product_code}_prices", domain=self.domain, root="production")
+
+        if displayed_sale is None:
+            pytest.skip(f"SKIP {tc_id}: Không đọc được giá sale từ card '{product_name}'")
+
+        sale_ok = abs(displayed_sale - expected_sale) <= TOLERANCE
+        reason = "" if sale_ok else (
+            f" → NGUYÊN NHÂN: Giá min(salePrice) trong config={expected_sale:,}đ "
+            f"nhưng website hiển thị={displayed_sale:,}đ. "
+            f"Kiểm tra lại bảng giá hoặc selector đọc giá sale."
+        )
+        print(
+            f"  [{'PASS' if sale_ok else 'FAIL'}] {tc_id} Giá sale | "
+            f"expected=min(salePrice)={expected_sale:,}đ | displayed={displayed_sale:,}đ{reason}"
+        )
+        assert sale_ok, f"LỖI LISTING GIÁ SALE {tc_id}:{reason}"
+
+        # Đọc và assert giá gốc gạch ngang (FAIL nếu sai, INFO nếu không tìm thấy)
+        displayed_original = self.listing.read_listing_original_price(product_name)
+        if displayed_original is not None:
+            orig_ok = abs(displayed_original - expected_original) <= TOLERANCE
+            reason_o = "" if orig_ok else (
+                f" → NGUYÊN NHÂN: Giá max(originalPrice) trong config={expected_original:,}đ "
+                f"nhưng website hiển thị={displayed_original:,}đ. "
+                f"Kiểm tra lại bảng giá hoặc selector đọc giá gạch."
+            )
+            print(
+                f"  [{'PASS' if orig_ok else 'FAIL'}] {tc_id} Giá gạch | "
+                f"expected=max(originalPrice)={expected_original:,}đ | displayed={displayed_original:,}đ{reason_o}"
+            )
+            assert orig_ok, f"LỖI LISTING GIÁ GỐC {tc_id}:{reason_o}"
+        else:
+            print(f"  [INFO] {tc_id}: Không tìm thấy element giá gạch — bỏ qua assert")
+
+        print(f"  [PASS] {tc_id}: {product_name} listing price PASSED")
+
+    # ── LISTING_001: PT01 ─────────────────────────────────────────────────────
+
+    @pytest.mark.production
+    def test_LISTING_001_PT01(self):
+        """LISTING_001 — Verify listing: Áo Phông Cá Tính.
+
+        Giá gạch = max(originalPrice) = 227.000đ
+        Giá sale = min(salePrice)     = 189.000đ
+        """
+        self._assert_listing_price("LISTING_001", "PT01")
+
+    # ── LISTING_002: M21 ─────────────────────────────────────────────────────
+
+    @pytest.mark.production
+    def test_LISTING_002_M21(self):
+        """LISTING_002 — Verify listing: Áo Phông Năng Động.
+
+        Giá gạch = max(originalPrice) = 154.000đ  (variant MÀU)
+        Giá sale = min(salePrice)     = 119.000đ  (variant TRẮNG)
+        """
+        self._assert_listing_price("LISTING_002", "M21")
+
+    # ── LISTING_003: M22 ─────────────────────────────────────────────────────
+
+    @pytest.mark.production
+    def test_LISTING_003_M22(self):
+        """LISTING_003 — Verify listing: Áo Phông Cơ Bản.
+
+        Giá gạch = max(originalPrice) = 167.000đ  (variant MÀU)
+        Giá sale = min(salePrice)     = 132.000đ  (variant TRẮNG)
+        """
+        self._assert_listing_price("LISTING_003", "M22")
+
+    # ── LISTING_004: ET002 ───────────────────────────────────────────────────
+
+    @pytest.mark.production
+    def test_LISTING_004_ET002(self):
+        """LISTING_004 — Verify listing: Áo Phông Trẻ Em.
+
+        Giá gạch = max(originalPrice) = 110.000đ  (variant 150-160)
+        Giá sale = min(salePrice)     = 87.000đ   (variant 100-140)
+        """
+        self._assert_listing_price("LISTING_004", "ET002")

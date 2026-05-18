@@ -5,7 +5,7 @@ trigger: always_on
 # GEMINI.md — Tryonic QA Workspace Rules
 
 > File này định nghĩa cách AI hoạt động trong workspace QA Tryonic.
-> Cập nhật: 2026-04-02
+> Cập nhật: 2026-04-23
 
 ---
 
@@ -125,7 +125,22 @@ Full protocol: `@[skills/qa-planning]`
 ### Project Type: QA Automation
 - **Primary Agent**: `qa-playwright-engineer`
 - **Test Framework**: Playwright (Python)
-- **Test URL**: `https://shop.tryonic.ai/`
+- **Test URL (TEST)**: `https://test.shop.tryonic.ai/`
+- **Test URL (PROD)**: `https://shop.tryonic.ai/`
+
+### 🔴 MÔI TRƯỜNG CHẠY TEST (BẮT BUỘC)
+
+> **MANDATORY — KHÔNG ĐƯỢC VI PHẠM:**
+>
+> 1. **Mặc định LUÔN dùng `--env=test`** khi đề xuất hoặc tạo lệnh pytest.
+> 2. **Chỉ dùng `--env=prod`** khi user yêu cầu RÕ RÀNG bằng chữ "prod", "production", "live".
+> 3. **Trước khi chạy prod**: cảnh báo user — "⚠️ Lệnh này sẽ chạy trên PRODUCTION. Xác nhận?"
+> 4. **Bat files / scripts**: mặc định ghi `--env=test`.
+
+| Flag | Môi trường | URL | Khi nào dùng |
+|---|---|---|---|
+| `--env=test` | TEST | test.shop.tryonic.ai | **MẶC ĐỊNH** |
+| `--env=prod` | PRODUCTION | shop.tryonic.ai | Chỉ khi được yêu cầu |
 
 ### Gemini Mode Mapping
 

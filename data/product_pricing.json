@@ -16,8 +16,49 @@
       "type": "percentage",
       "value": 0.20,
       "applies_to": "subtotal"
+    },
+    "USERMAI": {
+      "label": "Giảm theo giá vốn (margin áo + in)",
+      "type": "per_item_margin",
+      "formula": "(salePrice_ao + salePrice_in) - (costPrice_ao + costPrice_in)",
+      "note": "Tính per item theo variant, không phải %. costPrice_in = salePrice_in / 1.20"
+    },
+    "SAVE50K": {
+      "label": "Giảm cố định 50.000đ",
+      "type": "fixed_amount",
+      "value": 50000,
+      "applies_to": "subtotal"
+    },
+    "MAIFREESHIP": {
+      "label": "Miễn phí vận chuyển",
+      "type": "free_shipping",
+      "value": 0,
+      "applies_to": "shipping",
+      "note": "Phí vận chuyển = 0đ khi áp dụng mã này"
+    },
+    "maisize1": {
+      "label": "Mã KM 1 size / 1 đơn (giá max nhất)",
+      "type": "per_max_item_margin",
+      "formula": "(salePrice_ao - costPrice_ao) cho size có salePrice cao nhất trong đơn",
+      "applies_to": "single_item",
+      "note": "Chỉ áp cho 1 item (size có giá bán cao nhất). Discount = margin của item đó × 1."
+    },
+    "maisizeall": {
+      "label": "Mã KM all size / 1 đơn (giá max nhất)",
+      "type": "per_item_margin_max_variant",
+      "formula": "max_margin × Σqty  (max_margin = salePrice_max - costPrice_max của variant đắt nhất)",
+      "applies_to": "single_order",
+      "note": "Toàn bộ qty trong đơn đều hưởng margin rate của item có salePrice cao nhất. Discount = max(sale-cost) × total_qty."
+    },
+    "maiallcart": {
+      "label": "Mã KM all đơn trong giỏ hàng",
+      "type": "per_item_margin_all_cart",
+      "formula": "Σ (salePrice_ao - costPrice_ao) × qty cho từng item, theo variant tương ứng",
+      "applies_to": "all_cart",
+      "note": "Áp cho tất cả đơn hàng trong giỏ. Mỗi item tính margin riêng theo variant/costPrice thực tế."
     }
   },
+
 
   "print_sale_prices": {
     "_note": "Giá bán dịch vụ in (có margin 20%), chưa VAT. Áp dụng chung cho mọi loại áo.",

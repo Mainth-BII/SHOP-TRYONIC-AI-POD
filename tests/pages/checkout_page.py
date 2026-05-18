@@ -484,15 +484,13 @@ class CheckoutPage(BasePage):
 
     # ── Buy-now modal helpers ──────────────────────────────────────────────────
 
+    # Selector thực tế của buy-now popup (div max-w-md shadow, không có role=dialog)
+    _BUYNOW_MODAL_SEL = "[class*='max-w-md'][class*='shadow']"
+
     def is_buynow_modal_visible(self, timeout: int = 5000) -> bool:
         """Kiểm tra popup 'Mua ngay' đang hiển thị."""
         try:
-            modal = self.page.locator(
-                "[role='dialog']:has-text('Thanh toán'), "
-                "[role='dialog']:has-text('Mua ngay'), "
-                "[class*='modal']:has-text('Thanh toán ngay'), "
-                "[class*='drawer']:has-text('Thanh toán')"
-            ).first
+            modal = self.page.locator(self._BUYNOW_MODAL_SEL).first
             return modal.is_visible(timeout=timeout)
         except Exception:
             return False
@@ -500,14 +498,12 @@ class CheckoutPage(BasePage):
     def read_buynow_modal_product_name(self) -> str:
         """Đọc tên sản phẩm trong popup Mua ngay."""
         try:
-            return self.page.evaluate(r"""() => {
-                const dialog = document.querySelector(
-                    "[role='dialog'], [class*='modal'], [class*='drawer']"
-                );
+            return self.page.evaluate(f"""() => {{
+                const dialog = document.querySelector("{self._BUYNOW_MODAL_SEL}");
                 if (!dialog) return '';
                 const h = dialog.querySelector('h1, h2, h3, [class*="name"], [class*="title"]');
                 return h ? h.innerText.trim() : '';
-            }""") or ""
+            }}""") or ""
         except Exception:
             return ""
 
@@ -515,20 +511,16 @@ class CheckoutPage(BasePage):
         """Đọc đơn giá trong popup Mua ngay."""
         import re
         try:
-            raw = self.page.evaluate(r"""() => {
-                const dialog = document.querySelector(
-                    "[role='dialog'], [class*='modal'], [class*='drawer']"
-                );
+            raw = self.page.evaluate(f"""() => {{
+                const dialog = document.querySelector("{self._BUYNOW_MODAL_SEL}");
                 if (!dialog) return null;
-                const els = dialog.querySelectorAll(
-                    "[class*='price'], [class*='Price'], span"
-                );
-                for (const el of els) {
+                const els = dialog.querySelectorAll("[class*='price'], [class*='Price'], span");
+                for (const el of els) {{
                     const t = el.innerText || '';
-                    if (/\d[\d,.]*\d[đ₫]/.test(t)) return t;
-                }
+                    if (/\\d[\\d,.]*\\d[đ₫]/.test(t)) return t;
+                }}
                 return null;
-            }""")
+            }}""")
             if raw:
                 digits = re.sub(r"[^\d]", "", raw)
                 return int(digits) if digits else None
@@ -1092,12 +1084,35 @@ class CheckoutPage(BasePage):
                 }
             }
 
-            // Size + Qty — tìm pattern "L ×1" hoặc "M x1"
-            const sizeQty = text.match(/([XSML234]+)\s*[×x]\s*(\d+)/i);
-            if (sizeQty) {
-                result.size = sizeQty[1];
-                result.qty = parseInt(sizeQty[2]);
+            // Size + Qty — tìm line-by-line để tránh false cross-line match
+            // Hỗ trợ size số (100-199 cho ET002 trẻ em) và size chữ (XS/S/M/L/XL/2XL)
+            let sizeFound = null, qtyFound = null;
+            for (let i = 0; i < lines.length; i++) {
+                const ln = lines[i];
+                const nextLn = i + 1 < lines.length ? lines[i + 1] : '';
+                // Pattern 1: "(Màu, Size) × N" trên 1 dòng
+                const m1 = ln.match(/\((?:[^,)]+),\s*([A-Z0-9]+)\)\s*[×x]\s*(\d+)/i);
+                if (m1) { sizeFound = m1[1]; qtyFound = parseInt(m1[2]); break; }
+                // Pattern 2a: "NNN × N" trên 1 dòng (size 3 chữ số: ET002 100-199)
+                const m2a = ln.match(/\b(\d{3})\s*[×x]\s*(\d+)/);
+                if (m2a) { sizeFound = m2a[1]; qtyFound = parseInt(m2a[2]); break; }
+                // Pattern 2b: "NNN" dòng trên, "× N" dòng dưới
+                if (/^\d{3}$/.test(ln)) {
+                    const qm2 = nextLn.match(/^[×x]\s*(\d+)/);
+                    if (qm2) { sizeFound = ln; qtyFound = parseInt(qm2[1]); break; }
+                }
+                // Pattern 3: size chữ chuẩn — phải đứng ngay trước "× N" (cùng dòng hoặc dòng sau)
+                // Dùng word-boundary chặt: không match khi là tiền tố của từ (Số, Sản, shopping...)
+                const m3 = ln.match(/(?:^|[\s,:])(2XL|3XL|4XL|XL|XS|[SML])$/i);
+                if (m3) {
+                    const qm = nextLn.match(/^[×x]\s*(\d+)/);
+                    if (qm) { sizeFound = m3[1]; qtyFound = parseInt(qm[1]); break; }
+                }
+                // Pattern 3b: "SIZE × N" trên cùng 1 dòng (size chữ kế tiếp ngay ×)
+                const m3b = ln.match(/(?:^|[\s,:])(2XL|3XL|4XL|XL|XS|[SML])\s*[×x]\s*(\d+)/i);
+                if (m3b) { sizeFound = m3b[1]; qtyFound = parseInt(m3b[2]); break; }
             }
+            if (sizeFound) { result.size = sizeFound; result.qty = qtyFound; }
 
             // THÔNG TIN GIAO HÀNG section
             const shipSection = text.split(/THÔNG TIN GIAO HÀNG/i)[1] || '';
@@ -1275,4 +1290,93 @@ class CheckoutPage(BasePage):
 
         if tc_id:
             print(f"  [WARN] {tc_id}: AI gen timeout sau {timeout_s}s")
+        return False
+
+    # ── Cart / Studio popup helpers ────────────────────────────────────────────
+
+    def is_size_in_qty_section(self, size: str) -> bool:
+        """Kiểm tra size đã xuất hiện trong mục qty của modal buy-now."""
+        modal = self.page.locator(self._BUYNOW_MODAL_SEL).first
+        return modal.locator(f"text={size}").first.is_visible(timeout=3000)
+
+    def select_all_sizes_in_modal(self, sizes: list, qty: int = 1) -> None:
+        """Chọn từng size trong popup buy-now và đặt quantity."""
+        modal = self.page.locator(self._BUYNOW_MODAL_SEL).first
+        for size in sizes:
+            btn = modal.locator(f"button:has-text('{size}')").first
+            if btn.is_visible(timeout=3000):
+                btn.click()
+                self.page.wait_for_timeout(300)
+            qty_input = modal.locator("input[type='number']").last
+            if qty_input.is_visible(timeout=2000):
+                qty_input.fill(str(qty))
+                self.page.wait_for_timeout(200)
+
+    def click_them_vao_gio(self) -> bool:
+        """Nhấn nút 'Thêm vào giỏ' trong popup buy-now / cart panel. Trả về True nếu click được."""
+        try:
+            btn = self.page.locator(
+                "button:has-text('Thêm vào giỏ'), button:has-text('Add to Cart')"
+            ).first
+            if btn.is_visible(timeout=5000):
+                btn.click()
+                self.page.wait_for_timeout(2000)
+                return True
+        except Exception:
+            pass
+        return False
+
+    def open_cart_panel(self) -> None:
+        """Mở panel giỏ hàng (icon giỏ hàng trên header)."""
+        self.page.locator("[data-testid='cart-icon'], [aria-label*='cart'], [class*='cart']").first.click()
+        self.page.wait_for_timeout(800)
+
+    def read_cart_panel_total(self) -> int | None:
+        """Đọc tổng tiền trong panel giỏ hàng (slide-in panel, trả về int VNĐ)."""
+        import re as _re
+        raw = self.page.evaluate(r"""() => {
+            const panel = document.querySelector('[class*="max-w-md"][class*="shadow"]');
+            if (!panel) return null;
+            const text = panel.innerText || '';
+            const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+            const priceRe = /(\d{1,3}(?:[,.]\d{3})+)/;
+            for (let i = 0; i < lines.length; i++) {
+                if (/Tổng tiền/i.test(lines[i])) {
+                    let m = lines[i].match(priceRe);
+                    if (m) return m[1];
+                    if (i + 1 < lines.length) {
+                        let m2 = lines[i + 1].match(priceRe);
+                        if (m2) return m2[1];
+                    }
+                }
+            }
+            return null;
+        }""")
+        if not raw:
+            return None
+        digits = _re.sub(r"[^\d]", "", str(raw))
+        return int(digits) if digits else None
+
+    def click_checkout_from_cart(self) -> bool:
+        """Nhấn nút 'Thanh toán ngay' / 'Thanh toán' trong panel giỏ hàng."""
+        try:
+            panel = self.page.locator(self._BUYNOW_MODAL_SEL).first
+            if panel.is_visible(timeout=3000):
+                btn = panel.locator(
+                    "button:has-text('Thanh toán ngay'), button:has-text('Thanh toán')"
+                ).first
+                if btn.is_visible(timeout=3000):
+                    btn.click()
+                    self.page.wait_for_timeout(3000)
+                    return True
+        except Exception:
+            pass
+        try:
+            btn = self.page.locator("button:has-text('Thanh toán ngay')").first
+            if btn.is_visible(timeout=3000):
+                btn.click()
+                self.page.wait_for_timeout(3000)
+                return True
+        except Exception:
+            pass
         return False

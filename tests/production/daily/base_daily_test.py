@@ -28,6 +28,23 @@ class BaseDailyTest:
     _REPORT_TITLE: str = "Daily Smoke Test"
     _results: ClassVar[list] = []
 
+    # ── Screenshot ───────────────────────────────────────────────────────────
+
+    def _shot(self, tc_id: str, step: str, label: str) -> None:
+        """Chụp screenshot vào screenshots/daily/<suite>/<tc_id>/."""
+        shot_dir = os.path.join(
+            os.path.dirname(__file__), "..", "..", "..", "screenshots",
+            "daily", self._SUITE_NAME, tc_id.replace(" ", "_"),
+        )
+        os.makedirs(shot_dir, exist_ok=True)
+        ts = datetime.now().strftime("%H%M%S")
+        fpath = os.path.join(shot_dir, f"S{step}_{label}_{ts}.png")
+        try:
+            self.page.screenshot(path=fpath, full_page=True)
+            print(f"  [SHOT] {tc_id} S{step}: {label}")
+        except Exception as e:
+            print(f"  [SHOT FAIL] {tc_id} S{step}: {e}")
+
     # ── Ghi kết quả ──────────────────────────────────────────────────────────
 
     def _record_check(self, mh: str, check: str, status: str,

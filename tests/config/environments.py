@@ -30,8 +30,12 @@ class Environment:
     admin_url: str
     login_email: str = ""
     login_password: str = ""
-    admin_email: str = ""        # ← thêm
-    admin_password: str = ""     # ← thêm
+    admin_email: str = ""
+    admin_password: str = ""
+    affiliate_email: str = ""      # tài khoản affiliate (đã được duyệt)
+    affiliate_password: str = ""
+    customer_email: str = ""       # tài khoản khách hàng mua qua link affiliate
+    customer_password: str = ""
 
     def __str__(self) -> str:
         email_hint = f" | LOGIN={self.login_email}" if self.login_email else ""
@@ -53,6 +57,10 @@ TEST = Environment(
     login_password=os.getenv("DAILY_TEST_PASSWORD", ""),
     admin_email=os.getenv("ADMIN_TEST_EMAIL", ""),
     admin_password=os.getenv("ADMIN_TEST_PASSWORD", ""),
+    affiliate_email=os.getenv("AFFILIATE_EMAIL", ""),
+    affiliate_password=os.getenv("AFFILIATE_PASSWORD", ""),
+    customer_email=os.getenv("CUSTOMER_EMAIL", ""),
+    customer_password=os.getenv("CUSTOMER_PASSWORD", ""),
 )
 
 PROD = Environment(
@@ -64,6 +72,10 @@ PROD = Environment(
     login_password=os.getenv("PROD_PASSWORD", ""),
     admin_email=os.getenv("ADMIN_TEST_EMAIL", ""),
     admin_password=os.getenv("ADMIN_TEST_PASSWORD", ""),
+    affiliate_email=os.getenv("AFFILIATE_EMAIL", ""),
+    affiliate_password=os.getenv("AFFILIATE_PASSWORD", ""),
+    customer_email=os.getenv("CUSTOMER_EMAIL", ""),
+    customer_password=os.getenv("CUSTOMER_PASSWORD", ""),
 )
 
 # ── Lookup ────────────────────────────────────────────────────────────────────

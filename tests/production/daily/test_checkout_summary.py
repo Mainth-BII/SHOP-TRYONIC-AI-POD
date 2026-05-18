@@ -74,7 +74,7 @@ def _read_total(page: Page) -> int | None:
         const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
         const re = /(\d{1,3}(?:[,.]\d{3})+)/;
         for (let i = 0; i < lines.length; i++) {
-            if (/Tổng (cộng|thanh toán)/i.test(lines[i])) {
+            if (/Tổng thanh toán/i.test(lines[i])) {
                 const m = lines[i].match(re) || (lines[i+1] || '').match(re);
                 if (m) return parseInt(m[1].replace(/[^\d]/g, ''));
             }
@@ -157,43 +157,53 @@ class TestDailyCheckoutSummary(BaseDailyTest):
         p = _PT01
         self._login()
 
+        tc = "PT01_GIAM20"
+
         # Navigate to product
         self.page.goto(f"{self.env.fe_url}/product/{p['slug']}")
         self.page.wait_for_load_state("domcontentloaded")
         self.page.wait_for_timeout(1_500)
+        self._shot(tc, "1", "product_page")
 
-        # Select color + size + add to cart
-        try:
-            self.detail.select_color(p["color"])
-            self.page.wait_for_timeout(500)
-        except Exception:
-            pass
-        try:
-            self.checkout.select_size_by_name(p["size"])
-            self.page.wait_for_timeout(500)
-        except Exception:
-            pass
+        # Mua ngay → chọn size → Thêm vào giỏ (cùng pattern với price_checkout)
+        mua_ngay_ok = self.detail.click_mua_ngay()
+        if not mua_ngay_ok:
+            pytest.skip("Không mở được popup Mua ngay")
+        self.page.wait_for_timeout(1_500)
+        self._shot(tc, "2", "buynow_popup")
 
-        added = self.detail.click_add_to_cart()
+        self.checkout.select_size_by_name(p["size"])
+        self.page.wait_for_timeout(800)
+        self._shot(tc, "3", "size_selected")
+
+        added = self.checkout.click_them_vao_gio()
         self.page.wait_for_timeout(2_000)
         if not added:
-            pytest.skip("Không click được 'Thêm vào giỏ'")
+            pytest.skip("Không click được 'Thêm vào giỏ' trong popup")
 
-        # Navigate to cart → proceed to checkout
-        self.checkout.navigate_cart()
-        self.page.wait_for_timeout(1_500)
-        proceed = self.page.locator(
-            "button:has-text('Thanh toán'), a:has-text('Thanh toán')"
-        ).first
-        if proceed.is_visible(timeout=5_000):
-            proceed.click()
-            try:
-                self.page.wait_for_url("**/checkout**", timeout=10_000)
-            except Exception:
-                self.page.wait_for_timeout(3_000)
-        else:
+        # Mở cart panel qua header → proceed to checkout
+        try:
+            menu_btn = self.page.locator("button:has-text('menu')").first
+            if menu_btn.is_visible(timeout=2_000):
+                menu_btn.click()
+                self.page.wait_for_timeout(600)
+            cart_btn = self.page.locator("button:has-text('Giỏ hàng')").first
+            if cart_btn.is_visible(timeout=3_000):
+                cart_btn.click()
+                self.page.wait_for_timeout(1_500)
+        except Exception:
+            pass
+        self._shot(tc, "4", "cart_panel")
+
+        checkout_ok = self.checkout.click_checkout_from_cart()
+        if not checkout_ok:
             self.page.goto(f"{self.env.fe_url}/checkout")
-            self.page.wait_for_timeout(2_000)
+        try:
+            self.page.wait_for_url("**/checkout**", timeout=10_000)
+        except Exception:
+            self.page.wait_for_timeout(3_000)
+
+        self._shot(tc, "5", "checkout_before_coupon")
 
         # Verify subtotal trước coupon
         subtotal_raw = self.page.evaluate(r"""() => {
@@ -211,6 +221,7 @@ class TestDailyCheckoutSummary(BaseDailyTest):
 
         # Apply GIAM20
         applied = _apply_coupon(self.page, "GIAM20")
+        self._shot(tc, "6", "after_giam20")
         status_applied = "✅ PASS" if applied else "⚠️ WARN"
         self._record_check("MH2", "GIAM20 áp dụng", status_applied,
                            "OK" if applied else "Không tìm thấy ô nhập coupon",

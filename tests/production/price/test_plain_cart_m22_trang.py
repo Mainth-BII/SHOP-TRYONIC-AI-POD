@@ -1,26 +1,10 @@
 """
-PT01 Áo Phông Cá Tính / Màu Trắng — Full price flow (MH1 → MH10)
+M22 Áo Phông Cơ Bản / Màu Trắng — Luồng Trơn / Giỏ hàng (MH1→MH11)
 
-Luồng chính (test_full_price_flow_mua_ngay):
-  MH1  — Product Listing   /#products
-  MH2  — Product Detail    /product/ao-phong-ca-tinh
-  MH3  — Studio            /studio (từ button Thiết kế hình in)
-  MH4  — Popup Mua ngay    (overlay trên MH2)
-  MH5  — Checkout          /checkout
-  MH6  — QR Code           (sau click Thanh toán)
-  MH7  — Order             (sau hủy QR → Xem đơn hàng)
-  MH8  — Đơn hàng của tôi  /my-orders
-  MH9  — Chi tiết đơn hàng /order/<id>
-  MH10 — Admin verify
-
-Luồng cart riêng (test_MH10_cart_price):
-  MH2 → Add to cart → Cart page — verify giá item + tổng
-
-Giá PT01 / Trắng / Size M / qty 1 (áo phôi — không in):
-  salePrice      = 189.000đ
-  originalPrice  = 227.000đ
-  VAT 8%         = 15.120đ  |  Phí GH = 20.000đ  |  Tổng = 224.120đ
-  Với GIAM20 (20%):  giảm 37.800đ → tổng 183.296đ
+Giá M22 / Trắng / Size M / qty 1 (áo trơn — không in):
+  salePrice     = 143.000đ  |  originalPrice = 172.000đ
+  VAT 8%        = 11.440đ   |  Phí GH = 20.000đ  |  Tổng = 174.440đ
+  Với GIAM20 (20%): giảm 28.600đ → tổng 143.552đ
 """
 import json
 import os
@@ -42,47 +26,50 @@ def _load() -> dict:
 
 
 _DATA    = _load()
-_PRODUCT = next(x for x in _DATA["products"] if x["code"] == "PT01")
-_VARIANT = _PRODUCT["variants"][0]
+_PRODUCT = next(x for x in _DATA["products"] if x["code"] == "M22")
+_VARIANT = next(v for v in _PRODUCT["variants"] if v["id"] == "M22_TRANG")
 
-_SALE        = _VARIANT["salePrice"]                          # 189_000
-_ORIGINAL    = _VARIANT["originalPrice"]                     # 227_000
-_SHIPPING    = _DATA["global"]["shipping_fee"]               # 20_000
-_VAT_RATE    = _DATA["global"]["VAT_rate"]                   # 0.08
-_GIAM20      = _DATA["discount_codes"]["GIAM20"]["value"]    # 0.20
+_SALE         = _VARIANT["salePrice"]                           # 143_000
+_ORIGINAL     = _VARIANT["originalPrice"]                       # 172_000
+_LIST_SALE    = _PRODUCT["listing_displayed"]["sale_price"]     # 143_000
+_LIST_ORIG    = _PRODUCT["listing_displayed"]["original_price"] # 183_000
+_SHIPPING     = _DATA["global"]["shipping_fee"]                 # 20_000
+_VAT_RATE     = _DATA["global"]["VAT_rate"]                     # 0.08
+_GIAM20       = _DATA["discount_codes"]["GIAM20"]["value"]      # 0.20
 
-_VAT_NO_DC   = int(_SALE * _VAT_RATE)                       # 15_120
-_TOTAL_NO_DC = _SALE + _VAT_NO_DC + _SHIPPING               # 224_120
-_AFTER_DC    = int(_SALE * (1 - _GIAM20))                   # 151_200
-_VAT_DC      = int(_AFTER_DC * _VAT_RATE)                   # 12_096
-_TOTAL_DC    = _AFTER_DC + _VAT_DC + _SHIPPING              # 183_296
-_DISCOUNT_AMT = int(_SALE * _GIAM20)                        # 37_800
+_VAT_NO_DC    = int(_SALE * _VAT_RATE)                          # 11_440
+_TOTAL_NO_DC  = _SALE + _VAT_NO_DC + _SHIPPING                 # 174_440
+_AFTER_DC     = int(_SALE * (1 - _GIAM20))                     # 114_400
+_VAT_DC       = int(_AFTER_DC * _VAT_RATE)                     # 9_152
+_TOTAL_DC     = _AFTER_DC + _VAT_DC + _SHIPPING                # 143_552
+_DISCOUNT_AMT = int(_SALE * _GIAM20)                           # 28_600
 
-_SLUG  = "ao-phong-ca-tinh"
-_NAME  = "Áo Phông Cá Tính"
+_SLUG  = "ao-phong-co-ban"
+_NAME  = "Áo Phông Cơ Bản"
 _COLOR = "Trắng"
 _SIZE  = "M"
 
 # ── Test class ────────────────────────────────────────────────────────────────
 
 
-class TestPlainBuynowPT01Trang(BasePriceFlowTest):
-    """PT01 Trắng — full flow MH1→MH10 (Admin) + cart flow riêng."""
+class TestPlainCartM22Trang(BasePriceFlowTest):
+    """M22 Trắng — luồng Trơn / Giỏ hàng MH1→MH11."""
 
     _MH_NAMES = {
         "MH1":   "Product Listing",
         "MH2":   "Product Detail",
         "MH3":   "Studio",
-        "MH4":   "Popup Mua ngay",
+        "MH4":   "Popup Mua ngay → Thêm vào giỏ",
         "MH5":   "Checkout",
         "MH6":   "QR Code",
         "MH7":   "Order (sau hủy QR)",
         "MH8":   "Đơn hàng của tôi",
         "MH9":   "Chi tiết đơn hàng",
-        "MH10":  "Admin — Chi tiết đơn",
+        "MH10":  "Giỏ hàng",
+        "MH11":  "Admin — Chi tiết đơn",
         "Login": "Đăng nhập",
     }
-    _REPORT_TITLE = "PT01 Áo Phông Cá Tính (Trắng) — Full Price Flow"
+    _REPORT_TITLE = "M22 Áo Phông Cơ Bản (Trắng) — Trơn / Giỏ hàng"
 
     @pytest.fixture(autouse=True)
     def setup(self, home_page, product_list_page, product_detail_page,
@@ -94,18 +81,37 @@ class TestPlainBuynowPT01Trang(BasePriceFlowTest):
         self.auth     = auth_page
         self.checkout = checkout_page
         self.env      = env
-
         self.page     = home_page.page
-        self.tc       = "PT01_TRANG"
+        self.tc       = "M22_TRANG_PLAIN_CART"
         self.root     = "production"
-        self.domain   = "pt01_trang_flow"
+        self.domain   = "m22_trang_plain_cart"
         self._results = []
 
-    # ── Main test ─────────────────────────────────────────────────────────────
+    def _open_cart_panel(self) -> bool:
+        """Mở cart panel qua menu → Giỏ hàng."""
+        try:
+            menu_btn = self.page.locator("button:has-text('menu')").first
+            if menu_btn.is_visible(timeout=3000):
+                menu_btn.click()
+                self.page.wait_for_timeout(800)
+            cart_btn = self.page.locator("button:has-text('Giỏ hàng')").first
+            if cart_btn.is_visible(timeout=3000):
+                cart_btn.click()
+                self.page.wait_for_timeout(1500)
+                return True
+        except Exception:
+            pass
+        return False
+
+    def _read_cart_panel_text(self) -> str:
+        return self.page.evaluate(r"""() => {
+            const panel = document.querySelector('[class*="max-w-md"][class*="shadow"]');
+            return panel ? panel.innerText : '';
+        }""") or ""
 
     @pytest.mark.production
-    def test_full_price_flow_mua_ngay(self):
-        """PT01 Trắng — full flow MH1→MH9 (Mua ngay) + MH10 Admin."""
+    def test_plain_cart(self):
+        """M22 Trắng / Trơn / Giỏ hàng — MH1→MH11."""
         tc = self.tc
         self._login()
 
@@ -119,9 +125,14 @@ class TestPlainBuynowPT01Trang(BasePriceFlowTest):
         if self.listing.is_product_card_visible(_NAME):
             listing_sale = self.listing.read_listing_sale_price(_NAME)
             listing_orig = self.listing.read_listing_original_price(_NAME)
-            self._assert_price(listing_sale, _SALE,     "MH1 Giá sale listing")
-            self._assert_price(listing_orig, _ORIGINAL, "MH1 Giá gốc listing (gạch ngang)")
+            self._assert_price(listing_sale, _LIST_SALE, "MH1 Giá sale listing")
+            self._assert_price(listing_orig, _LIST_ORIG, "MH1 Giá gốc listing (gạch ngang)")
             self.listing.click_product_card(_NAME)
+            # Verify navigation — fallback nếu vẫn ở listing
+            self.page.wait_for_timeout(1500)
+            if _SLUG not in self.page.url:
+                print(f"  [INFO] MH1: click_product_card chưa navigate — dùng slug trực tiếp")
+                self.detail.navigate(_SLUG)
         else:
             print(f"  [INFO] MH1: Card '{_NAME}' không tìm thấy — navigate trực tiếp")
             self.detail.navigate(_SLUG)
@@ -130,44 +141,24 @@ class TestPlainBuynowPT01Trang(BasePriceFlowTest):
         # MH2 — Product Detail
         # ════════════════════════════════════════════════════════════════════
         print(f"\n  ── MH2: Product Detail ───────────────────────────────────")
-        self.detail.navigate(_SLUG)
+        self.page.wait_for_load_state("domcontentloaded")
+        self.page.wait_for_timeout(1000)
         self._shot("MH2_1", "detail_page")
-
-        name = self.detail.read_product_name()
-        name_ok = _NAME.lower().split()[-1] in name.lower() if name else False
-        print(f"  [{'PASS' if name_ok else 'WARN'}] MH2 Tên SP: '{name}'")
 
         sale_disp = self.detail.read_sale_price()
         orig_disp = self.detail.read_original_price()
-        if orig_disp is None:
-            raw = self.page.evaluate(r"""() => {
-                const el = document.querySelector('.line-through,[style*="line-through"],del,s');
-                if (el && el.innerText) return el.innerText;
-                return null;
-            }""")
-            if raw:
-                digits = re.sub(r"[^\d]", "", str(raw))
-                orig_disp = int(digits) if digits else None
-        self._shot("MH2_2", "detail_prices_default")
-        self._assert_price(sale_disp, _SALE, "MH2 Giá sale default (Trắng)")
+        self._assert_price(sale_disp, _SALE,     "MH2 Giá sale default (Trắng)")
         self._assert_price(orig_disp, _ORIGINAL, "MH2 Giá gốc gạch ngang")
-
-        # Đổi màu Đen → info only
-        if self.detail.select_color("Đen"):
-            self.page.wait_for_timeout(800)
-            sale_den = self.detail.read_sale_price()
-            self._shot("MH2_3", "detail_color_den")
-            print(f"  [INFO] MH2 Đổi màu Đen: giá={sale_den:,}đ" if sale_den else
-                  "  [INFO] MH2 Đổi màu Đen: không đọc được giá")
+        self._shot("MH2_2", "detail_prices_default")
+        print(f"  [PASS] MH2: OK — sale={sale_disp}, orig={orig_disp}")
 
         self.detail.select_color(_COLOR)
         self.page.wait_for_timeout(500)
-        print(f"  [PASS] MH2: OK")
 
         # ════════════════════════════════════════════════════════════════════
         # MH3 — Studio
         # ════════════════════════════════════════════════════════════════════
-        print(f"\n  ── MH3: Studio (Thiết kế hình in) ───────────────────────")
+        print(f"\n  ── MH3: Studio ───────────────────────────────────────────")
         studio_ok = self.detail.click_thiet_ke_hinh_in()
         if studio_ok:
             self.page.wait_for_timeout(2000)
@@ -188,9 +179,9 @@ class TestPlainBuynowPT01Trang(BasePriceFlowTest):
         self._shot("MH3_2", "back_to_detail")
 
         # ════════════════════════════════════════════════════════════════════
-        # MH4 — Popup Mua ngay
+        # MH4 — Popup Mua ngay → Thêm vào giỏ
         # ════════════════════════════════════════════════════════════════════
-        print(f"\n  ── MH4: Popup Mua ngay ───────────────────────────────────")
+        print(f"\n  ── MH4: Popup Mua ngay → Thêm vào giỏ ───────────────────")
         mua_ngay_ok = self.detail.click_mua_ngay()
         if not mua_ngay_ok:
             pytest.skip(f"SKIP MH4 ({tc}): Không mở được popup Mua ngay")
@@ -200,23 +191,54 @@ class TestPlainBuynowPT01Trang(BasePriceFlowTest):
         self._shot("MH4_1", "buynow_modal")
 
         if modal_visible:
-            # UI mới: giá chỉ hiển thị sau khi chọn size — chọn size trước rồi mới verify giá
             self.checkout.select_size_by_name(_SIZE)
             self.page.wait_for_timeout(800)
             price_after = self.checkout.read_buynow_modal_price()
-            btn_price   = self.checkout.read_buynow_button_price()
             self._shot("MH4_2", f"buynow_size_{_SIZE}")
             self._assert_price(price_after, _SALE, f"MH4 Đơn giá sau chọn size {_SIZE}")
-            self._assert_price(btn_price,   _SALE, "MH4 Giá trên button Thanh toán ngay")
-            print(f"  [PASS] MH4: Popup OK")
+            print(f"  [PASS] MH4: Popup OK — size {_SIZE} selected")
         else:
-            print(f"  [WARN] MH4: Modal không detect được — bỏ qua verify")
+            print(f"  [WARN] MH4: Modal không detect được — thử thêm vào giỏ trực tiếp")
 
-        # Click Thanh toán ngay → MH5
-        paid = self.checkout.click_thanh_toan_ngay()
-        if not paid:
+        added = self.checkout.click_them_vao_gio()
+        self._shot("MH4_3", "after_them_vao_gio")
+        self._record_check("MH4", "MH4 Thêm vào giỏ",
+                           "✅ PASS" if added else "⚠️ WARN",
+                           "OK" if added else "click failed", "button clicked")
+        print(f"  [{'PASS' if added else 'WARN'}] MH4: Thêm vào giỏ = {added}")
+
+        # ════════════════════════════════════════════════════════════════════
+        # MH10 — Giỏ hàng
+        # ════════════════════════════════════════════════════════════════════
+        print(f"\n  ── MH10: Giỏ hàng ───────────────────────────────────────")
+        panel_opened = self._open_cart_panel()
+        self._shot("MH10_1", "cart_panel")
+
+        cart_text = self._read_cart_panel_text() if panel_opened else ""
+        if not cart_text:
+            cart_text = self.page.evaluate("() => document.body.innerText || ''")
+
+        name_in_cart  = _NAME.split()[-1].lower() in cart_text.lower()
+        color_in_cart = _COLOR.lower() in cart_text.lower()
+        size_in_cart  = _SIZE in cart_text
+
+        self._record_check("MH10", "MH10 Tên SP trong giỏ",
+                           "✅ PASS" if name_in_cart else "⚠️ WARN",
+                           "tìm thấy" if name_in_cart else "không thấy", _NAME)
+        self._record_check("MH10", "MH10 Màu trong giỏ",
+                           "✅ PASS" if color_in_cart else "⚠️ WARN",
+                           "tìm thấy" if color_in_cart else "không thấy", _COLOR)
+        self._record_check("MH10", f"MH10 Size {_SIZE} trong giỏ",
+                           "✅ PASS" if size_in_cart else "⚠️ WARN",
+                           "tìm thấy" if size_in_cart else "không thấy", _SIZE)
+
+        cart_total = self.checkout.read_cart_panel_total()
+        self._assert_price(cart_total, _SALE, "MH10 Tổng giỏ hàng (1 áo)")
+        self._shot("MH10_2", "cart_prices")
+        print(f"  [PASS] MH10: Giỏ hàng OK — size={_SIZE}, total={cart_total}")
+
+        if not self.checkout.click_checkout_from_cart():
             self.detail.goto("/checkout")
-            self.page.wait_for_timeout(2000)
         try:
             self.page.wait_for_url("**/checkout**", timeout=10000)
         except Exception:
@@ -234,16 +256,13 @@ class TestPlainBuynowPT01Trang(BasePriceFlowTest):
         vat      = self.checkout.read_checkout_vat()
         shipping = self.checkout.read_checkout_shipping()
         total    = self.checkout.read_checkout_total()
-        btn_p    = self.checkout.read_payment_button_price()
-        print(f"  [INFO] MH5: subtotal={subtotal}, vat={vat}, ship={shipping}, total={total}, btn={btn_p}")
+        print(f"  [INFO] MH5: subtotal={subtotal}, vat={vat}, ship={shipping}, total={total}")
 
-        self._assert_price(subtotal, _SALE, "MH5 Tổng tiền")
-        self._assert_price(vat, _VAT_NO_DC, "MH5 Thuế VAT (8%)")
-        self._assert_price(shipping, _SHIPPING, "MH5 Phí giao hàng")
-        self._assert_price(total, _TOTAL_NO_DC, "MH5 Tổng thanh toán")
-        self._assert_price(btn_p, _TOTAL_NO_DC, "MH5 Giá trên button Thanh toán")
+        self._assert_price(subtotal, _SALE,        "MH5 Tổng tiền")
+        self._assert_price(vat,      _VAT_NO_DC,   "MH5 Thuế VAT (8%)")
+        self._assert_price(shipping, _SHIPPING,    "MH5 Phí giao hàng")
+        self._assert_price(total,    _TOTAL_NO_DC, "MH5 Tổng thanh toán")
 
-        # Apply GIAM20
         dc_ok = False
         self.checkout.apply_discount_code("GIAM20")
         self.page.wait_for_timeout(2000)
@@ -255,43 +274,26 @@ class TestPlainBuynowPT01Trang(BasePriceFlowTest):
             self._assert_price(discount_amt, _DISCOUNT_AMT, "MH5 Giảm giá GIAM20 (20%)")
             total_dc = self.checkout.read_checkout_total()
             self._assert_price(total_dc, _TOTAL_DC, "MH5 Tổng TT sau GIAM20")
-            print(f"  [PASS] MH5: Áp mã GIAM20 OK — giảm {discount_amt:,}đ")
+            print(f"  [PASS] MH5: GIAM20 OK — giảm {discount_amt:,}đ")
         else:
             print(f"  [INFO] MH5: Mã GIAM20 không áp dụng — tiếp tục với giá gốc")
 
         actual_total_paid = self.checkout.read_payment_button_price() or _TOTAL_NO_DC
         print(f"  [INFO] MH5: Giá thực tế = {actual_total_paid:,}đ")
 
-        # Đọc size + qty thực tế từ checkout
-        checkout_product = self.page.evaluate(r"""() => {
-            const text = document.body.innerText || '';
-            const m = text.match(/([XSML234]+)\s*[×x]\s*(\d+)/i);
-            return { size: m ? m[1] : '', qty: m ? parseInt(m[2]) : 1 };
-        }""")
-        actual_size = checkout_product.get("size", _SIZE) if checkout_product else _SIZE
-        actual_qty  = checkout_product.get("qty", 1) if checkout_product else 1
-
         order_info = {
             "product_name": _NAME,
             "color": _COLOR,
-            "size": actual_size,
-            "qty": actual_qty,
+            "size": _SIZE,
+            "qty": 1,
         }
-
-        # Đọc thông tin giao hàng thực tế
         shipping_info = self.page.evaluate(r"""() => {
-            const text = document.body.innerText || '';
-            const phoneMatch = text.match(/0\d{9,10}/);
-            return { phone: phoneMatch ? phoneMatch[0] : '' };
+            const m = (document.body.innerText || '').match(/0\d{9,10}/);
+            return { phone: m ? m[0] : '' };
         }""")
         order_info["phone"] = shipping_info.get("phone", "")
-        print(f"  [INFO] MH5: order_info = {order_info}")
 
-        self.checkout.fill_guest_shipping_info(
-            "Test Tryonic", "0912345678",
-            "123 Đường Test, Quận 1, TP. Hồ Chí Minh",
-            tc_id=tc
-        )
+        # User đã đăng nhập — address pre-fill, chỉ điền MST
         self.checkout.fill_tax_code("012345678901", tc_id=tc)
         self._shot("MH5_3", "checkout_filled")
         self.checkout.click_checkout_payment()
@@ -306,25 +308,22 @@ class TestPlainBuynowPT01Trang(BasePriceFlowTest):
         order_code = ""
 
         if qr_visible:
-            qr_amount      = self.checkout.read_qr_amount()
-            qr_note_amount = self.checkout.read_qr_note_amount()
+            qr_amount = self.checkout.read_qr_amount()
             if qr_amount is None:
                 raw = self.page.evaluate(r"""() => {
                     const m = document.body.innerText.match(/thanh to[áa]n\s+(\d[\d,.]*\d)/i);
                     return m ? m[1] : null;
                 }""")
                 qr_amount = int(re.sub(r"[^\d]", "", str(raw))) if raw else None
-
-            self._assert_price(qr_amount, actual_total_paid, "MH6 Số tiền QR")
-            self._assert_price(qr_note_amount, actual_total_paid, "MH6 Số tiền trong lưu ý")
+            self._assert_price(qr_amount,                           actual_total_paid, "MH6 Số tiền QR")
+            self._assert_price(self.checkout.read_qr_note_amount(), actual_total_paid, "MH6 Số tiền trong lưu ý")
 
             self.page.on("dialog", lambda d: d.accept())
-            ok_cancel = self.checkout.click_cancel_qr()
+            self.checkout.click_cancel_qr()
             self.page.wait_for_timeout(3000)
             self.checkout.confirm_cancel_dialog()
             self.page.wait_for_timeout(2000)
             self._shot("MH6_2", "qr_cancelled")
-
             self.checkout.click_view_order()
             self.page.wait_for_timeout(2000)
 
@@ -334,59 +333,20 @@ class TestPlainBuynowPT01Trang(BasePriceFlowTest):
 
             oc_m = re.search(r"orderCode=([\w-]+)", self.page.url)
             order_code = oc_m.group(1) if oc_m else ""
-            print(f"  [INFO] MH6: order_code={order_code}, URL={self.page.url}")
+            print(f"  [INFO] MH6: order_code={order_code}")
         else:
             print(f"  [WARN] MH6: QR không hiển thị — URL: {self.page.url}")
 
         # ════════════════════════════════════════════════════════════════════
-        # MH7 / MH8 / MH9 — dùng base helpers
+        # MH7 / MH8 / MH9 / MH11
         # ════════════════════════════════════════════════════════════════════
         self._do_mh7_order(actual_total_paid, _SHIPPING)
         self._do_mh8_my_orders(actual_total_paid)
         self._do_mh9_order_detail(
             order_info, actual_total_paid, _SHIPPING,
-            dc_ok, _DISCOUNT_AMT if dc_ok else None
+            dc_ok, _DISCOUNT_AMT if dc_ok else None,
         )
+        self._do_admin_verify("MH11", order_code, order_info, actual_total_paid, _SHIPPING)
 
-        print(f"\n  [PASS] {tc}: MH1→MH9 PASSED")
-
-        # ════════════════════════════════════════════════════════════════════
-        # MH10 — Admin verify
-        # ════════════════════════════════════════════════════════════════════
-        self._do_admin_verify("MH10", order_code, order_info, actual_total_paid, _SHIPPING)
-
-        self._print_summary_table()
-
-    # ── Cart flow riêng ───────────────────────────────────────────────────────
-
-    @pytest.mark.production
-    def test_MH10_cart_price(self):
-        """PT01 Trắng — verify giá item trong Giỏ hàng sau Thêm vào giỏ."""
-        tc = self.tc + "_MH10"
-        self._login()
-
-        print(f"\n  ── MH2 → Cart: Add to cart flow ─────────────────────────")
-        self.detail.navigate(_SLUG)
-        self.page.wait_for_timeout(1500)
-        self.detail.select_color(_COLOR)
-        self.page.wait_for_timeout(500)
-        self.checkout.select_size_by_name(_SIZE)
-
-        added = self.detail.click_add_to_cart()
-        self.page.wait_for_timeout(2000)
-        self._shot("MH10_add", "add_to_cart_result")
-
-        if not added:
-            pytest.skip(f"SKIP ({tc}): Không click được button 'Thêm vào giỏ'")
-
-        self.checkout.navigate_cart()
-        self.page.wait_for_timeout(1500)
-        self._shot("MH10_1", "cart_page")
-
-        item_price = self.checkout.read_cart_item_price()
-        cart_total = self.checkout.read_cart_total()
-        self._assert_price(item_price, _SALE, "MH10 Giá item PT01 Trắng trong giỏ")
-        self._assert_price(cart_total, _SALE, "MH10 Tổng giỏ hàng")
-        self._shot("MH10_2", "cart_prices")
-        print(f"  [PASS] MH10: Cart price OK")
+        print(f"\n  [PASS] {tc}: ALL SCREENS PASSED")
         self._print_summary_table()

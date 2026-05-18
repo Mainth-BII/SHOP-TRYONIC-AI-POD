@@ -242,7 +242,8 @@ class StudioPage(BasePage):
     def open_order_modal(self) -> None:
         self.order_button.wait_for(state="visible", timeout=15_000)
         self.order_button.scroll_into_view_if_needed()
-        self.order_button.click()
+        # force=True: bypass backdrop overlay (dialog/sheet của Radix UI có thể chặn click)
+        self.order_button.click(force=True)
         # Chờ navigate tới trang /review (flow mới)
         try:
             self.page.wait_for_url("**/studio/**/review", timeout=8_000)

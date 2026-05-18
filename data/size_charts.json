@@ -1,0 +1,63 @@
+{
+  "_note": "Bảng size chính thức cho từng sản phẩm. Nguồn: nhà sản xuất YooHoo. Đơn vị: cm / kg.",
+
+  "PT01": {
+    "name": "Áo Phông Cá Tính",
+    "slug": "ao-phong-ca-tinh",
+    "sizes": ["XS", "S", "M", "L", "XL", "2XL", "3XL"],
+    "chart": {
+      "XS":  {"dai_ao": 66, "nguc_half": 46, "vai": 38, "dai_tay": 20, "chieu_cao": "150-155", "can_nang": "<45"},
+      "S":   {"dai_ao": 68, "nguc_half": 48, "vai": 40, "dai_tay": 21, "chieu_cao": "155-160", "can_nang": "45-53"},
+      "M":   {"dai_ao": 70, "nguc_half": 50, "vai": 42, "dai_tay": 22, "chieu_cao": "160-165", "can_nang": "53-60"},
+      "L":   {"dai_ao": 72, "nguc_half": 52, "vai": 44, "dai_tay": 23, "chieu_cao": "165-170", "can_nang": "60-66"},
+      "XL":  {"dai_ao": 74, "nguc_half": 54, "vai": 46, "dai_tay": 24, "chieu_cao": "170-175", "can_nang": "66-73"},
+      "2XL": {"dai_ao": 76, "nguc_half": 56, "vai": 48, "dai_tay": 25, "chieu_cao": "175-180", "can_nang": "73-80"},
+      "3XL": {"dai_ao": 78, "nguc_half": 58, "vai": 50, "dai_tay": 25, "chieu_cao": "180-185", "can_nang": "80-87"}
+    }
+  },
+
+  "M21": {
+    "name": "Áo Phông Năng Động",
+    "slug": "ao-phong-nang-dong",
+    "sizes": ["S", "M", "L", "XL", "2XL", "3XL"],
+    "chart": {
+      "S":   {"dai_ao": 64, "ngang_ao": 46, "dai_tay": 19, "chieu_cao": "<150",    "can_nang": "40-50"},
+      "M":   {"dai_ao": 66, "ngang_ao": 49, "dai_tay": 20, "chieu_cao": "150-160", "can_nang": "50-60"},
+      "L":   {"dai_ao": 69, "ngang_ao": 52, "dai_tay": 21, "chieu_cao": "160-170", "can_nang": "60-70"},
+      "XL":  {"dai_ao": 71, "ngang_ao": 54, "dai_tay": 22, "chieu_cao": "170-175", "can_nang": "70-80"},
+      "2XL": {"dai_ao": 74, "ngang_ao": 56, "dai_tay": 23, "chieu_cao": "175-180", "can_nang": "80-90"},
+      "3XL": {"dai_ao": 76, "ngang_ao": 58, "dai_tay": 24, "chieu_cao": "180-185", "can_nang": "90-100"}
+    }
+  },
+
+  "M22": {
+    "name": "Áo Phông Cơ Bản",
+    "slug": "ao-phong-co-ban",
+    "material": "100% cotton 2 chiều 230gsm",
+    "type": "T-Shirt Unisex",
+    "sizes": ["M", "L", "XL", "2XL"],
+    "chart": {
+      "M":   {"dai_ao": 67, "ngang_ao": 51, "dai_tay": 20, "chieu_cao": "150-160", "can_nang": "50-60"},
+      "L":   {"dai_ao": 70, "ngang_ao": 53, "dai_tay": 21, "chieu_cao": "160-170", "can_nang": "60-70"},
+      "XL":  {"dai_ao": 72, "ngang_ao": 55, "dai_tay": 22, "chieu_cao": "170-175", "can_nang": "70-80"},
+      "2XL": {"dai_ao": 74, "ngang_ao": 57, "dai_tay": 23, "chieu_cao": "175-180", "can_nang": "80-90"}
+    }
+  },
+
+  "ET002": {
+    "name": "Áo Phông Trẻ Em",
+    "slug": "ao-phong-tre-em",
+    "material": "100% cotton 2 chiều 180gsm",
+    "type": "T-Shirt Kids",
+    "sizes": ["100", "110", "120", "130", "140", "150", "160"],
+    "chart": {
+      "100": {"chieu_cao": "90-100",  "can_nang": "11-13"},
+      "110": {"chieu_cao": "100-110", "can_nang": "14-16"},
+      "120": {"chieu_cao": "110-120", "can_nang": "17-18"},
+      "130": {"chieu_cao": "120-125", "can_nang": "19-20"},
+      "140": {"chieu_cao": "125-130", "can_nang": "21-24"},
+      "150": {"chieu_cao": "130-140", "can_nang": "25-30"},
+      "160": {"chieu_cao": "140-150", "can_nang": "30-35"}
+    }
+  }
+}

@@ -53,8 +53,10 @@ class TestDailySizeGuide(BaseDailyTest):
 
         self._record_check(code, f"{code} AI popup mở được", "✅ PASS",
                            "Popup visible", "Popup visible")
+        self._shot(code, "1", "size_popup_open")
 
         submit_recommendation(self.page, gender, height, weight)
+        self._shot(code, "2", "ai_result")
         result = read_recommended_size(self.page)
 
         if result is None:

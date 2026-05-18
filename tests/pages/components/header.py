@@ -41,6 +41,16 @@ class HeaderComponent:
             "header a:has-text('Sản phẩm'), header a:has-text('San pham')"
         ).first
 
+    @property
+    def nav_ao_tron(self) -> Locator:
+        return self.page.locator(
+            "a:has-text('Áo trơn'), "
+            "li a:has-text('Áo trơn'), "
+            "[class*='dropdown'] a:has-text('Áo trơn'), "
+            "[class*='menu'] a:has-text('Áo trơn'), "
+            "[class*='nav'] a:has-text('Áo trơn')"
+        ).first
+
     # ── State ────────────────────────────────────────────────────────────────
 
     def is_logged_in(self, timeout: int = 3000) -> bool:
@@ -63,6 +73,22 @@ class HeaderComponent:
         self.open_profile_menu()
         self.logout_button.click()
         self.page.wait_for_timeout(2000)
+
+    def navigate_ao_tron(self) -> bool:
+        """Hover 'Sản phẩm áo' trong header → click 'Áo trơn' trong dropdown.
+
+        Trả về True nếu navigate thành công.
+        """
+        try:
+            self.nav_product.hover()
+            self.page.wait_for_timeout(600)
+            self.nav_ao_tron.wait_for(state="visible", timeout=4000)
+            self.nav_ao_tron.click()
+            self.page.wait_for_load_state("domcontentloaded")
+            self.page.wait_for_timeout(1500)
+            return True
+        except Exception:
+            return False
 
     def logout_if_needed(self, tc_id: str = "") -> bool:
         """Logout nếu đang đăng nhập. Trả về True nếu đã logout."""

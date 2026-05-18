@@ -1,0 +1,14 @@
+"""Session-scope autosave: sau khi session kết thúc → lưu report từng suite."""
+import pytest
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _save_daily_reports():
+    yield
+    from tests.production.daily.test_price_checkout import TestDailyPriceCheckout
+    from tests.production.daily.test_size_guide import TestDailySizeGuide
+    from tests.production.daily.test_checkout_summary import TestDailyCheckoutSummary
+
+    for cls in (TestDailyPriceCheckout, TestDailySizeGuide, TestDailyCheckoutSummary):
+        if cls._results:
+            cls._save_report()

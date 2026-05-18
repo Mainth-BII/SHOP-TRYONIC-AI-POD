@@ -1,45 +1,29 @@
 name: Tryonic AI — Daily Automated Tests
 
 on:
-  # ── 2x daily: 01:00 UTC (08:00 ICT) and 13:00 UTC (20:00 ICT) ─────────────
+  # ── 8:00 ICT (01:00 UTC) mỗi ngày ──────────────────────────────────────────
   schedule:
-    - cron: "0 3 * * *"    # 10:00 ICT (Test Link Ảnh Trực Tiếp)
-    - cron: "05 9 * * *"   # 16:05 ICT
+    - cron: "3 1 * * *"    # 08:03 ICT hàng ngày
 
   # ── Manual trigger ──────────────────────────────────────────────────────────
   workflow_dispatch:
-    inputs:
-      test_suite:
-        description: "Test suite to run"
-        required: false
-        default: "all"
-        type: choice
-        options:
-          - all
-          - smoke
-          - artwork
-          - validation
-          - mobile
 
-  # ── Run on push for verification ───────────────────────────────────────────
+  # ── Run on push để verify ──────────────────────────────────────────────────
   push:
-    branches: [lauch_tryonic_ai]
+    branches: [main]
     paths:
-      - "tests/**"
-      - "requirements.txt"
+      - "tests/production/daily/**"
+      - "tests/config/**"
+      - "tests/pages/**"
+      - "data/**"
       - ".github/workflows/daily-tests.yml"
 
 env:
-  BASE_URL: "https://pre-launch.tryonic.ai"
-  REPORT_DIR: "tests/test_reports"
-  SCREENSHOT_DIR: "tests/screenshots"
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-  # Để thay đổi nhóm chat, bạn chỉ cần dán link webhook mới vào đây:
-  GOOGLE_CHAT_WEBHOOK_URL: "https://chat.googleapis.com/v1/spaces/AAQAnJCvuH4/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=FldqIuhTmVo0okEMkQznxvLuf_piUQ-0gn0N0PP-dmU"
 
 jobs:
   test:
-    name: Playwright Tests — ${{ github.event.inputs.test_suite || 'all' }}
+    name: Daily Smoke — TEST env
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -64,42 +48,41 @@ jobs:
 
       # ── Create output directories ────────────────────────────────────────
       - name: Create output directories
-        run: mkdir -p tests/screenshots tests/test_reports
+        run: mkdir -p reports screenshots/daily
 
-      # ── Run TC_GEN_001 only (step-by-step với screenshots từng bước) ─────
-      - name: Run Playwright tests — TC_GEN_001
+      # ── Run daily smoke tests ─────────────────────────────────────────────
+      - name: Run daily smoke — tests/production/daily/
         id: run_tests
         env:
-          BASE_URL: ${{ env.BASE_URL }}
           CI: "true"
           PYTHONPATH: ${{ github.workspace }}/tests
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          DAILY_TEST_EMAIL: ${{ secrets.DAILY_TEST_EMAIL }}
+          DAILY_TEST_PASSWORD: ${{ secrets.DAILY_TEST_PASSWORD }}
         run: |
-          python -m pytest tests/test_gen_with_steps.py \
+          python -m pytest tests/production/daily/ \
+            --env=test \
             --browser chromium \
-            --screenshot only-on-failure \
-            --video retain-on-failure \
-            --tracing retain-on-failure \
             -v \
             --tb=short \
             -p no:cacheprovider \
-            --junit-xml=tests/test_reports/junit.xml \
-            2>&1 | tee tests/test_reports/test_output.txt
+            --junit-xml=reports/junit.xml \
+            2>&1 | tee reports/test_output.txt
         continue-on-error: true
 
       # ── Parse results ─────────────────────────────────────────────────────
       - name: Parse test results
         id: results
         run: |
-          JUNIT="tests/test_reports/junit.xml"
+          JUNIT="reports/junit.xml"
           if [ -f "$JUNIT" ]; then
             TOTAL=$(grep -oP 'tests="\K[0-9]+' "$JUNIT" | head -1 || echo "0")
             FAILED=$(grep -oP 'failures="\K[0-9]+' "$JUNIT" | head -1 || echo "0")
             ERRORS=$(grep -oP 'errors="\K[0-9]+' "$JUNIT" | head -1 || echo "0")
             SKIPPED=$(grep -oP 'skipped="\K[0-9]+' "$JUNIT" | head -1 || echo "0")
             PASSED=$((TOTAL - FAILED - ERRORS - SKIPPED))
-            echo "total=$TOTAL"   >> $GITHUB_OUTPUT
-            echo "passed=$PASSED" >> $GITHUB_OUTPUT
+            echo "total=$TOTAL"    >> $GITHUB_OUTPUT
+            echo "passed=$PASSED"  >> $GITHUB_OUTPUT
+            echo "skipped=$SKIPPED" >> $GITHUB_OUTPUT
             echo "failed=$((FAILED + ERRORS))" >> $GITHUB_OUTPUT
             if [ "$TOTAL" -eq 0 ]; then
               echo "status=ERROR" >> $GITHUB_OUTPUT
@@ -110,26 +93,27 @@ jobs:
             fi
           else
             echo "⚠️ junit.xml not found — pytest may have failed to start"
-            cat tests/test_reports/test_output.txt 2>/dev/null || true
-            echo "total=0"   >> $GITHUB_OUTPUT
-            echo "passed=0"  >> $GITHUB_OUTPUT
-            echo "failed=0"  >> $GITHUB_OUTPUT
+            cat reports/test_output.txt 2>/dev/null || true
+            echo "total=0"    >> $GITHUB_OUTPUT
+            echo "passed=0"   >> $GITHUB_OUTPUT
+            echo "skipped=0"  >> $GITHUB_OUTPUT
+            echo "failed=0"   >> $GITHUB_OUTPUT
             echo "status=ERROR" >> $GITHUB_OUTPUT
           fi
 
       # ── Upload artifacts ──────────────────────────────────────────────────
-      - name: Upload test reports and screenshots
+      - name: Upload reports and screenshots
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: test-results-${{ github.run_number }}
+          name: daily-smoke-${{ github.run_number }}
           path: |
-            tests/test_reports/
-            tests/screenshots/
+            reports/
+            screenshots/daily/
           retention-days: 14
 
       # ── Notify Google Chat ────────────────────────────────────────────────
-      - name: Notify Google Chat [Tryonic_notify]
+      - name: Notify Google Chat
         if: always()
         continue-on-error: true
         env:
@@ -138,9 +122,10 @@ jobs:
           TOTAL: ${{ steps.results.outputs.total }}
           PASSED: ${{ steps.results.outputs.passed }}
           FAILED: ${{ steps.results.outputs.failed }}
+          SKIPPED: ${{ steps.results.outputs.skipped }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           RUN_NUMBER: ${{ github.run_number }}
-          BASE_URL: ${{ env.BASE_URL }}
+          BASE_URL: "https://test.shop.tryonic.ai"
         run: python .github/scripts/notify_google_chat.py
 
       # ── Fail job only if tests actually ran and failed ────────────────────
@@ -151,5 +136,5 @@ jobs:
         run: |
           echo "❌ Tests failed: ${{ steps.results.outputs.failed }} failures out of ${{ steps.results.outputs.total }}"
           echo "Status: ${{ steps.results.outputs.status }}"
-          cat tests/test_reports/test_output.txt 2>/dev/null | tail -50 || true
+          cat reports/test_output.txt 2>/dev/null | tail -50 || true
           exit 1

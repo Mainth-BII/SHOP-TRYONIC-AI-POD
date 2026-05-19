@@ -66,6 +66,7 @@ jobs:
             --browser chromium \
             --tb=short \
             --json-report --json-report-file=tests/test_reports/.report.json \
+            --junit-xml=tests/test_reports/junit.xml \
             -p no:cacheprovider
 
       - name: Run Tests (Daily Only)
@@ -111,8 +112,8 @@ jobs:
         if: always()
         id: test_results
         run: |
-          # Parse pytest output for stats
           TOTAL=0; PASSED=0; FAILED=0; SKIPPED=0; DURATION="0s"
+          FAILED_TESTS=""; PASSED_TESTS=""
 
           if [ -f tests/test_reports/.report.json ]; then
             TOTAL=$(jq '.summary.total // 0' tests/test_reports/.report.json)
@@ -120,16 +121,30 @@ jobs:
             FAILED=$(jq '.summary.failed // 0' tests/test_reports/.report.json)
             SKIPPED=$(jq '.summary.skipped // 0' tests/test_reports/.report.json)
             DURATION=$(jq -r '.duration // 0 | tostring + "s"' tests/test_reports/.report.json)
+
+            # Danh sách test FAIL
+            FAILED_TESTS=$(jq -r '
+              .tests[]
+              | select(.outcome == "failed")
+              | "❌ " + (.nodeid | split("::")[-1] | split("[")[0])
+                + (if (.nodeid | contains("[")) then " [" + (.nodeid | split("[")[1] | rtrimstr("]")) + "]" else "" end)
+            ' tests/test_reports/.report.json | head -20 | tr '\n' '|')
+
+            # Danh sách test PASS
+            PASSED_TESTS=$(jq -r '
+              .tests[]
+              | select(.outcome == "passed")
+              | "✅ " + (.nodeid | split("::")[-1] | split("[")[0])
+                + (if (.nodeid | contains("[")) then " [" + (.nodeid | split("[")[1] | rtrimstr("]")) + "]" else "" end)
+            ' tests/test_reports/.report.json | head -20 | tr '\n' '|')
           fi
 
-          # Fallback: count from exit code
           if [ "$TOTAL" = "0" ]; then
             TOTAL=1
             if [ "${{ job.status }}" = "success" ]; then PASSED=1; else FAILED=1; fi
             DURATION="${{ github.run_number }}s"
           fi
 
-          # Pass rate
           if [ "$TOTAL" -gt 0 ]; then
             RATE=$(( PASSED * 100 / TOTAL ))
           else
@@ -142,6 +157,8 @@ jobs:
           echo "skipped=$SKIPPED" >> $GITHUB_OUTPUT
           echo "rate=$RATE" >> $GITHUB_OUTPUT
           echo "duration=$DURATION" >> $GITHUB_OUTPUT
+          echo "failed_tests=$FAILED_TESTS" >> $GITHUB_OUTPUT
+          echo "passed_tests=$PASSED_TESTS" >> $GITHUB_OUTPUT
 
       - name: Send Google Chat Notification
         if: always()
@@ -156,6 +173,8 @@ jobs:
           SKIPPED="${{ steps.test_results.outputs.skipped }}"
           RATE="${{ steps.test_results.outputs.rate }}"
           DURATION="${{ steps.test_results.outputs.duration }}"
+          FAILED_TESTS="${{ steps.test_results.outputs.failed_tests }}"
+          PASSED_TESTS="${{ steps.test_results.outputs.passed_tests }}"
           RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           BRANCH="${{ github.ref_name }}"
           TIMESTAMP=$(date -u +"%Y-%m-%d %H:%M UTC")
@@ -163,18 +182,31 @@ jobs:
           if [ "$STATUS" = "success" ]; then
             ICON="✅"
             TITLE="Tryonic AI — ALL TESTS PASSED"
-            COLOR="#34A853"
           elif [ "$STATUS" = "cancelled" ]; then
             ICON="⚠️"
             TITLE="Tryonic AI — TESTS CANCELLED"
-            COLOR="#FBBC04"
           else
             ICON="❌"
             TITLE="Tryonic AI — TESTS FAILED"
-            COLOR="#EA4335"
           fi
 
-          # Build Card v2 JSON
+          # Format test lists (pipe-separated → newline)
+          FAILED_LIST=$(echo "$FAILED_TESTS" | tr '|' '\n' | grep -v '^$' | head -10)
+          PASSED_LIST=$(echo "$PASSED_TESTS" | tr '|' '\n' | grep -v '^$' | head -10)
+
+          # Build sections JSON
+          DETAIL_SECTIONS=""
+
+          if [ -n "$FAILED_LIST" ]; then
+            FAILED_TEXT=$(echo "$FAILED_LIST" | sed 's/$/\\n/' | tr -d '\n')
+            DETAIL_SECTIONS="${DETAIL_SECTIONS},{\"header\":\"❌ Failed Tests\",\"collapsible\":false,\"widgets\":[{\"textParagraph\":{\"text\":\"${FAILED_TEXT}\"}}]}"
+          fi
+
+          if [ -n "$PASSED_LIST" ]; then
+            PASSED_TEXT=$(echo "$PASSED_LIST" | sed 's/$/\\n/' | tr -d '\n')
+            DETAIL_SECTIONS="${DETAIL_SECTIONS},{\"header\":\"✅ Passed Tests\",\"collapsible\":true,\"widgets\":[{\"textParagraph\":{\"text\":\"${PASSED_TEXT}\"}}]}"
+          fi
+
           PAYLOAD=$(cat <<EOF
           {
             "cardsV2": [{
@@ -203,9 +235,11 @@ jobs:
                         }
                       }
                     ]
-                  },
-                  {
+                  }
+                  ${DETAIL_SECTIONS}
+                  ,{
                     "header": "Details",
+                    "collapsible": true,
                     "widgets": [
                       {
                         "decoratedText": {
@@ -216,7 +250,7 @@ jobs:
                       {
                         "decoratedText": {
                           "topLabel": "Commit",
-                          "text": "$(echo "$COMMIT_MSG" | head -c 80)"
+                          "text": "$(echo "$COMMIT_MSG" | head -c 80 | sed 's/"/\\"/g')"
                         }
                       }
                     ]
@@ -229,9 +263,7 @@ jobs:
                             {
                               "text": "View Full Report",
                               "onClick": {
-                                "openLink": {
-                                  "url": "${RUN_URL}"
-                                }
+                                "openLink": {"url": "${RUN_URL}"}
                               }
                             }
                           ]

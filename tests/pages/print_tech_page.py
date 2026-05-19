@@ -148,20 +148,10 @@ class PrintTechPage(BasePage):
             self.page.wait_for_function("""() => {
                 const body = document.body.innerText || '';
 
-                // Loading text phải biến mất
-                if (body.includes('Đang phân tích') || body.includes('Đang xử lý') ||
-                    body.includes('Đang tải')) return false;
-
-                // Không còn spinner / skeleton visible
-                const pulses = document.querySelectorAll(
-                    '[class*="animate-pulse"], [class*="skeleton"], [class*="loading"]'
-                );
-                const noSpinner = Array.from(pulses).every(el =>
-                    el.offsetWidth === 0 || el.offsetHeight === 0 ||
-                    getComputedStyle(el).display === 'none' ||
-                    getComputedStyle(el).visibility === 'hidden'
-                );
-                if (!noSpinner) return false;
+                // Text loading phải biến mất — đây là dấu hiệu chính xác nhất
+                if (body.includes('Đang gợi ý'))        return false;
+                if (body.includes('AI đang phân tích'))  return false;
+                if (body.includes('chờ trong giây lát')) return false;
 
                 // 'Gợi ý bằng AI' button phải biến mất (replaced bởi result)
                 const suggestBtns = Array.from(document.querySelectorAll('button')).filter(
@@ -169,6 +159,7 @@ class PrintTechPage(BasePage):
                 );
                 return suggestBtns.every(b => b.offsetWidth === 0 || b.offsetHeight === 0);
             }""", timeout=timeout)
+            self.page.wait_for_timeout(800)
             elapsed = round(time.time() - start, 1)
             print(f"    [TIME] AI công nghệ in xong trong {elapsed}s")
             return True, elapsed

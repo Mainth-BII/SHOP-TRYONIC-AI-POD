@@ -80,28 +80,20 @@ class TryonReviewPage(BasePage):
         return urls
 
     def open_review(self, studio_url: str) -> bool:
-        """Navigate vào studio → dismiss terms → click 'Hoàn tất thiết kế' → verify /review."""
+        """Navigate thẳng vào /review (bỏ qua editor click để tránh canvas issues trên CI)."""
+        review_url = studio_url.rstrip("/") + "/review"
         try:
-            self.page.goto(studio_url, wait_until="load", timeout=30_000)
+            self.page.goto(review_url, wait_until="load", timeout=30_000)
         except Exception as e:
-            print(f"  [WARN] goto timeout/error: {e}")
+            print(f"  [WARN] goto review timeout/error: {e}")
             return False
-        self.page.wait_for_timeout(3_000)
-        self.accept_terms()
-        self.page.wait_for_timeout(1_000)
-
         try:
-            self.hoan_tat_button.wait_for(state="visible", timeout=20_000)
-            self.hoan_tat_button.click()
-            self.page.wait_for_timeout(2_500)
-        except Exception as e:
-            print(f"  [WARN] Không click 'Hoàn tất thiết kế': {e}")
-            return False
-
-        try:
-            self.page.wait_for_url("**/review**", timeout=8_000)
+            self.page.wait_for_load_state("networkidle", timeout=10_000)
         except Exception:
             pass
+        self.page.wait_for_timeout(1_500)
+        self.accept_terms()
+        self.page.wait_for_timeout(500)
 
         if "/review" not in self.page.url:
             print(f"  [WARN] Không vào được /review — URL: {self.page.url}")

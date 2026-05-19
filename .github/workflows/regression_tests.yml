@@ -58,8 +58,11 @@ jobs:
         if: "${{ github.event.inputs.test_suite == 'all' || github.event_name != 'workflow_dispatch' }}"
         env:
           PYTHONPATH: ${{ github.workspace }}/tests
+          DAILY_TEST_EMAIL: ${{ secrets.DAILY_TEST_EMAIL }}
+          DAILY_TEST_PASSWORD: ${{ secrets.DAILY_TEST_PASSWORD }}
         run: |
-          python -m pytest tests/ -v --maxfail=5 \
+          python -m pytest tests/production/daily/ -v \
+            --env=test \
             --browser chromium \
             --tb=short \
             --json-report --json-report-file=tests/test_reports/.report.json \
@@ -143,7 +146,7 @@ jobs:
       - name: Send Google Chat Notification
         if: always()
         env:
-          WEBHOOK_URL: ${{ secrets.GOOGLE_CHAT_WEBHOOK }}
+          WEBHOOK_URL: ${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}
           COMMIT_MSG: ${{ github.event.head_commit.message || 'Manual trigger' }}
         run: |
           STATUS="${{ job.status }}"

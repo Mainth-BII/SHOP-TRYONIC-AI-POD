@@ -102,6 +102,33 @@ jobs:
             echo "status=ERROR" >> $GITHUB_OUTPUT
           fi
 
+      # ── Convert junit.xml → report.csv ───────────────────────────────────
+      - name: Convert junit.xml to CSV
+        if: always()
+        run: |
+          python - <<'EOF'
+          import xml.etree.ElementTree as ET, csv, os
+          src, dst = "reports/junit.xml", "reports/report.csv"
+          if not os.path.exists(src):
+              open(dst, "w").close()
+          else:
+              tree = ET.parse(src)
+              with open(dst, "w", newline="", encoding="utf-8-sig") as f:
+                  w = csv.DictWriter(f, fieldnames=["step", "expect_result", "actual_result"])
+                  w.writeheader()
+                  for case in tree.getroot().iter("testcase"):
+                      name = f"{case.get('classname','')}.{case.get('name','')}"
+                      fail  = case.find("failure")
+                      err   = case.find("error")
+                      skip  = case.find("skipped")
+                      if fail  is not None: actual = "❌ FAIL: "  + (fail.get("message","") or "")[:200]
+                      elif err is not None: actual = "❌ ERROR: " + (err.get("message","")  or "")[:200]
+                      elif skip is not None: actual = "⏭️ SKIP: " + (skip.get("message","") or "")[:100]
+                      else: actual = "✅ PASS"
+                      w.writerow({"step": name, "expect_result": "PASS", "actual_result": actual})
+          print("✅ Converted to", dst)
+          EOF
+
       # ── Upload artifacts ──────────────────────────────────────────────────
       - name: Upload reports and screenshots
         uses: actions/upload-artifact@v4
@@ -109,7 +136,10 @@ jobs:
         with:
           name: daily-smoke-${{ github.run_number }}
           path: |
-            reports/
+            reports/report.csv
+            reports/test_output.txt
+            reports/daily/*.md
+            reports/daily/*.csv
             screenshots/daily/
           retention-days: 14
 
@@ -184,7 +214,6 @@ jobs:
             -v \
             --tb=short \
             -p no:cacheprovider \
-            --junit-xml=reports/tryon-junit.xml \
             2>&1 | tee reports/tryon-output.txt
         continue-on-error: true
 
@@ -245,7 +274,6 @@ jobs:
             -v \
             --tb=short \
             -p no:cacheprovider \
-            --junit-xml=reports/print-tech-junit.xml \
             2>&1 | tee reports/print-tech-output.txt
         continue-on-error: true
 

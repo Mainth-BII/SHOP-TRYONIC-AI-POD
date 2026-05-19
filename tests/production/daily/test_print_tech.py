@@ -79,7 +79,7 @@ class TestDailyPrintTech(BaseDailyTest):
         self._shot(TC, "2", "ai_result")
 
         # ── 4. Click ^ expand danh sách công nghệ ────────────────────────────
-        expanded = self.pt.expand_tech_list()
+        expanded = self.pt.expand_tech_list(tech)
         self._record_check(TC, "Expand danh sách công nghệ",
                            "✅ PASS" if expanded else "⚠️ WARN",
                            "danh sách mở thành công" if expanded else "không click được expand")

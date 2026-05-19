@@ -88,7 +88,7 @@ class TestPrintTechFlow(BasePrintTechTest):
             self.pt.shot(design_label, "1", "ai_result", domain=_DOMAIN, root=_ROOT)
 
             # ── Click ^ để expand danh sách công nghệ ────────────────────────
-            expanded = self.pt.expand_tech_list()
+            expanded = self.pt.expand_tech_list(tech)
             if expanded:
                 self.page.wait_for_timeout(500)
                 self.pt.shot(design_label, "2", "tech_expanded", domain=_DOMAIN, root=_ROOT)

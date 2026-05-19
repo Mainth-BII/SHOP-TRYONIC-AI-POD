@@ -24,14 +24,14 @@ class PrintTechPage(BasePage):
     def goi_y_ai_button(self) -> Locator:
         return self.page.locator("button:has-text('Gợi ý bằng AI')").first
 
-    @property
-    def expand_tech_button(self) -> Locator:
-        # ^ chevron button next to the recommended tech badge (visible after AI done)
+    def expand_tech_button(self, tech: str = "") -> Locator:
+        """Button 'PET ^' / 'DTG ^' — xuất hiện sau khi AI gợi ý xong."""
+        if tech:
+            return self.page.locator(f"button:has-text('{tech}')").first
+        # Fallback: bất kỳ button ngắn chứa tên công nghệ in phổ biến
         return self.page.locator(
-            "button:has(svg[class*='lucide-chevron']), "
-            "button:has([class*='ChevronUp']), "
-            "button:has([class*='ChevronDown']), "
-            "button svg[class*='chevron']"
+            "button:has-text('PET'), button:has-text('DTG'), "
+            "button:has-text('UV'), button:has-text('Screen')"
         ).first
 
     # ── Navigation (giống TryonReviewPage) ───────────────────────────────────
@@ -182,14 +182,14 @@ class PrintTechPage(BasePage):
         except Exception:
             return ""
 
-    def expand_tech_list(self) -> bool:
-        """Click icon ^ để mở danh sách đầy đủ công nghệ in được gợi ý."""
+    def expand_tech_list(self, tech: str = "") -> bool:
+        """Click button 'PET ^' / 'DTG ^' để mở danh sách công nghệ in gợi ý."""
         try:
-            btn = self.expand_tech_button
+            btn = self.expand_tech_button(tech)
             btn.scroll_into_view_if_needed()
             btn.wait_for(state="visible", timeout=8_000)
             btn.click()
-            self.page.wait_for_timeout(1_000)
+            self.page.wait_for_timeout(1_200)
             return True
         except Exception as e:
             print(f"    [WARN] Không click expand tech list: {e}")

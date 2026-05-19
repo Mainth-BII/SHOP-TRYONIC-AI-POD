@@ -14,12 +14,14 @@ class BaseTryonTest:
     _REPORT_TITLE: str = "Daily Tryon: AI Thử đồ"
     _results: ClassVar[list] = []
 
-    def _record(self, design: str, combo: str, status: str, note: str = "") -> None:
+    def _record(self, design: str, combo: str, status: str,
+                note: str = "", elapsed: float = 0.0) -> None:
         self._results.append({
             "design": design,
             "combo": combo,
             "status": status,
             "note": note,
+            "elapsed": elapsed,
         })
 
     @classmethod
@@ -69,10 +71,13 @@ class BaseTryonTest:
             _cmb = str(r["combo"])
             _sta = str(r["status"])
             _nt  = str(r.get("note", ""))
+            _el   = r.get("elapsed", 0.0)
             icon = ("✅" if "PASS" in _sta else
                     "❌" if "FAIL" in _sta else
                     "⚠️" if "WARN" in _sta else "⏭️")
             line = f"{i}. {icon} **{_des}** / `{_cmb}`"
+            if _el:
+                line += f" ⏱ {_el}s"
             if _nt:
                 line += f" — {_nt}"
             detail_items += [line, ""]

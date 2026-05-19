@@ -93,11 +93,11 @@ class TestTryonFlow(BaseTryonTest):
                     self._record(design_label, combo_name, "❌ FAIL", "không click được Thử lại")
                     continue
 
-                loaded = self.tryon.wait_tryon_done()
+                loaded, elapsed = self.tryon.wait_tryon_done()
                 status = "✅ PASS" if loaded else "⚠️ WARN"
                 note   = "" if loaded else "tryon timeout"
 
                 self.tryon.shot(design_label, combo_name, "result", domain=_DOMAIN, root=_ROOT)
-                self._record(design_label, combo_name, status, note)
+                self._record(design_label, combo_name, status, note, elapsed)
 
         print(f"\n  [DONE] Screenshots: screenshots/{_ROOT}/{_DOMAIN}/")

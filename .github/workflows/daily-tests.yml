@@ -197,5 +197,6 @@ jobs:
           path: |
             reports/tryon-output.txt
             reports/daily/tryon_*.md
+            reports/daily/tryon_*.csv
             screenshots/daily/tryon/
           retention-days: 14

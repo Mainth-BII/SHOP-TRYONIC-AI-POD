@@ -3,6 +3,7 @@
 Dừng ở màn hình checkout — không submit đơn, không tạo rác trên production.
 Report format: numbered list (giống SH07), lưu tại reports/daily/.
 """
+import csv
 import glob as _glob
 import os
 import re
@@ -158,3 +159,20 @@ class BaseDailyTest:
         with open(filepath, "w", encoding="utf-8") as f:
             f.write("\n".join(lines))
         print(f"\n  📁 Daily report: {filepath}")
+
+        # ── CSV report ───────────────────────────────────────────────────────
+        csv_path = filepath.replace(".md", ".csv")
+        with open(csv_path, "w", encoding="utf-8-sig", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=["step", "expect_result", "actual_result"])
+            writer.writeheader()
+            for r in results:
+                mh   = str(r["mh"]).replace("\n", " ")
+                chk  = str(r["check"]).replace("\n", " ")
+                sta  = str(r["status"]).replace("\n", " ")
+                act  = str(r.get("actual", "")).replace("\n", " / ") or ""
+                exp  = str(r.get("expected", "")).replace("\n", " ") or ""
+                writer.writerow({
+                    "step": f"{mh} — {chk}",
+                    "expect_result": exp,
+                    "actual_result": f"{sta}: {act}" if act else sta,
+                })

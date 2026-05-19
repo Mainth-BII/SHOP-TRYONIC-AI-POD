@@ -3,6 +3,7 @@
 Tracking: mỗi (design, combo) ghi một dòng kết quả.
 Report format: giống BaseDailyTest, lưu tại reports/daily/tryon_<ts>.md.
 """
+import csv
 import glob as _glob
 import os
 from datetime import datetime
@@ -99,3 +100,25 @@ class BaseTryonTest:
         with open(filepath, "w", encoding="utf-8") as f:
             f.write("\n".join(lines))
         print(f"\n  📁 Tryon report: {filepath}")
+
+        # ── CSV report ───────────────────────────────────────────────────────
+        csv_path = filepath.replace(".md", ".csv")
+        with open(csv_path, "w", encoding="utf-8-sig", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=["step", "expect_result", "actual_result"])
+            writer.writeheader()
+            for r in results:
+                des  = str(r["design"])
+                cmb  = str(r["combo"])
+                sta  = str(r["status"])
+                note = str(r.get("note", ""))
+                el   = r.get("elapsed", 0.0)
+                actual = sta
+                if el:
+                    actual += f" ({el}s)"
+                if note:
+                    actual += f" — {note}"
+                writer.writerow({
+                    "step": f"{des} / {cmb}",
+                    "expect_result": "Tryon thành công",
+                    "actual_result": actual,
+                })

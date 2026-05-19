@@ -9,7 +9,9 @@ def _save_daily_reports():
     from production.daily.test_size_guide import TestDailySizeGuide
     from production.daily.test_checkout_summary import TestDailyCheckoutSummary
     from production.daily.test_tryon import TestDailyTryon
+    from production.daily.test_print_tech import TestDailyPrintTech
 
-    for cls in (TestDailyPriceCheckout, TestDailySizeGuide, TestDailyCheckoutSummary, TestDailyTryon):
+    for cls in (TestDailyPriceCheckout, TestDailySizeGuide, TestDailyCheckoutSummary,
+                TestDailyTryon, TestDailyPrintTech):
         if cls._results:
             cls._save_report()

@@ -82,7 +82,7 @@ class TryonReviewPage(BasePage):
     def open_review(self, studio_url: str) -> bool:
         """Navigate vào studio → dismiss terms → click 'Hoàn tất thiết kế' → verify /review."""
         try:
-            self.page.goto(studio_url, wait_until="domcontentloaded", timeout=30_000)
+            self.page.goto(studio_url, wait_until="load", timeout=30_000)
         except Exception as e:
             print(f"  [WARN] goto timeout/error: {e}")
             return False
@@ -91,7 +91,7 @@ class TryonReviewPage(BasePage):
         self.page.wait_for_timeout(1_000)
 
         try:
-            self.hoan_tat_button.wait_for(state="visible", timeout=10_000)
+            self.hoan_tat_button.wait_for(state="visible", timeout=20_000)
             self.hoan_tat_button.click()
             self.page.wait_for_timeout(2_500)
         except Exception as e:

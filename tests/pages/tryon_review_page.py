@@ -81,8 +81,11 @@ class TryonReviewPage(BasePage):
 
     def open_review(self, studio_url: str) -> bool:
         """Navigate vào studio → dismiss terms → click 'Hoàn tất thiết kế' → verify /review."""
-        self.page.goto(studio_url)
-        self.page.wait_for_load_state("domcontentloaded")
+        try:
+            self.page.goto(studio_url, wait_until="domcontentloaded", timeout=30_000)
+        except Exception as e:
+            print(f"  [WARN] goto timeout/error: {e}")
+            return False
         self.page.wait_for_timeout(3_000)
         self.accept_terms()
         self.page.wait_for_timeout(1_000)

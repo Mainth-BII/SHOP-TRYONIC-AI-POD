@@ -235,6 +235,95 @@ class StudioPage(BasePage):
         # force=True để bypass overlay (color swatch có thể che phủ button)
         btn.click(force=True)
 
+    def rotate_shirt(self, timeout: int = 10) -> tuple:
+        """Click nút 'Xoay áo' → verify xoay sang Mặt sau.
+        Verify bằng cách:
+        1. Snapshot canvas img src trước khi click (để so sánh thay đổi)
+        2. Click 'Xoay áo'
+        3. Chờ canvas thay đổi HOẶC 'Mặt sau' active-indicator xuất hiện
+        Trả về (success, elapsed_seconds, label_found).
+        """
+        import time
+
+        # Snapshot canvas hiện tại (src ảnh trên canvas area)
+        canvas_src_before = self.page.evaluate("""() => {
+            const imgs = Array.from(document.querySelectorAll('img[src]')).filter(img => {
+                const r = img.getBoundingClientRect();
+                return r.left > 300 && r.left < 900 && r.width > 100 && img.complete;
+            });
+            return imgs.map(i => i.src).join(',');
+        }""")
+
+        # Tìm nút "Xoay áo" — chỉ khớp text "xoay" (không khớp "Mặt sau")
+        btn = self.page.evaluate("""() => {
+            const xoay = Array.from(document.querySelectorAll('button, [role="button"]')).find(b => {
+                const t = (b.innerText || b.getAttribute('aria-label') || b.title || '').toLowerCase();
+                return t.includes('xoay') || t.includes('rotate');
+            });
+            if (xoay) {
+                xoay.click();
+                return 'clicked:' + (xoay.innerText || xoay.getAttribute('aria-label') || '').trim();
+            }
+            return 'not-found';
+        }""")
+        print(f"  [INFO] rotate_shirt btn: {btn}")
+        if btn == "not-found":
+            return False, 0.0, ""
+
+        start = time.time()
+        deadline = start + timeout
+        while time.time() < deadline:
+            result = self.page.evaluate(f"""() => {{
+                // Kiểm tra 1: canvas img src thay đổi sau khi xoay
+                const imgs = Array.from(document.querySelectorAll('img[src]')).filter(img => {{
+                    const r = img.getBoundingClientRect();
+                    return r.left > 300 && r.left < 900 && r.width > 100 && img.complete;
+                }});
+                const newSrc = imgs.map(i => i.src).join(',');
+                const canvasChanged = newSrc !== {repr(canvas_src_before)};
+
+                // Kiểm tra 2: button "Mặt sau" hoặc label "Mặt sau" active/selected
+                const matSauEl = Array.from(document.querySelectorAll('button, span, div, p')).find(el => {{
+                    if (el.childElementCount > 2) return false;
+                    const t = (el.innerText || '').trim();
+                    if (t !== 'Mặt sau') return false;
+                    const r = el.getBoundingClientRect();
+                    return r.width > 0;
+                }});
+                // Nút "Xoay áo" biến mất hoặc đổi thành "Mặt trước"
+                const xoayBtn = Array.from(document.querySelectorAll('button, [role="button"]')).find(b => {{
+                    const t = (b.innerText || '').toLowerCase();
+                    return t.includes('xoay');
+                }});
+                const matTruocBtn = Array.from(document.querySelectorAll('button, [role="button"]')).find(b => {{
+                    const t = (b.innerText || '').toLowerCase();
+                    return t.includes('mặt trước') || t.includes('mat truoc');
+                }});
+
+                return JSON.stringify({{
+                    canvasChanged,
+                    matSauVisible: !!matSauEl,
+                    xoayStillThere: !!xoayBtn,
+                    matTruocVisible: !!matTruocBtn,
+                }});
+            }}""")
+            try:
+                import json
+                state = json.loads(result)
+                print(f"  [INFO] rotate state: {state}")
+                if state.get("matSauVisible") or state.get("canvasChanged") or state.get("matTruocVisible"):
+                    elapsed = round(time.time() - start, 2)
+                    label = "Mặt sau" if state.get("matSauVisible") else ("canvas changed" if state.get("canvasChanged") else "Mặt trước visible")
+                    print(f"  [INFO] rotate_shirt confirmed: {label} after {elapsed}s")
+                    return True, elapsed, label
+            except Exception:
+                pass
+            self.page.wait_for_timeout(500)
+
+        elapsed = round(time.time() - start, 2)
+        print(f"  [WARN] rotate_shirt: không verify được sau {elapsed}s")
+        return False, elapsed, ""
+
     def wait_for_artworks(self, count: int = 3, timeout: int = 120) -> tuple:
         """Chờ AI tạo đủ `count` ảnh. Trả về (success, elapsed_seconds, found_count).
 

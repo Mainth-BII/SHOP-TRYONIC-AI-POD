@@ -157,3 +157,12 @@ class TestDailyArtwork(BaseDailyTest):
                            f"màu đã chọn: {chosen_color}" if ok8 else "không click được")
         if after_swatches:
             print(f"  [INFO] swatches sau khi chọn màu: {after_swatches[:3]}")
+
+        # ── 9. Xoay áo → verify hiển thị "Mặt sau" ─────────────────────────
+        self.page.wait_for_timeout(1_000)
+        self._shot(TC, "9a", "before_rotate")
+        ok9, elapsed9, label9 = self.studio.rotate_shirt(timeout=10)
+        self._record_check(TC, "Xoay áo → Mặt sau",
+                           "✅ PASS" if ok9 else "⚠️ WARN",
+                           f"hiện 'Mặt sau' sau {elapsed9}s" if ok9 else f"không thấy 'Mặt sau' ({label9})")
+        self._shot(TC, "9b", f"mat_sau_{ok9}")

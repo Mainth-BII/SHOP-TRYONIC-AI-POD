@@ -10,6 +10,15 @@ from datetime import datetime
 from typing import ClassVar
 
 
+def _clean_status(s: str) -> str:
+    s = str(s)
+    if "PASS" in s: return "PASS"
+    if "FAIL" in s: return "FAIL"
+    if "WARN" in s: return "WARN"
+    if "SKIP" in s: return "SKIP"
+    return s
+
+
 class BaseTryonTest:
     _SUITE_NAME: str = "TRYON"
     _REPORT_TITLE: str = "Daily Tryon: AI Thử đồ"
@@ -103,22 +112,22 @@ class BaseTryonTest:
 
         # ── CSV report ───────────────────────────────────────────────────────
         csv_path = filepath.replace(".md", ".csv")
+        fields = ["no", "tc_id", "step", "expected_result", "actual_result", "status", "duration"]
         with open(csv_path, "w", encoding="utf-8-sig", newline="") as f:
-            writer = csv.DictWriter(f, fieldnames=["step", "expect_result", "actual_result"])
+            writer = csv.DictWriter(f, fieldnames=fields)
             writer.writeheader()
-            for r in results:
+            for i, r in enumerate(results, 1):
                 des  = str(r["design"])
                 cmb  = str(r["combo"])
                 sta  = str(r["status"])
                 note = str(r.get("note", ""))
                 el   = r.get("elapsed", 0.0)
-                actual = sta
-                if el:
-                    actual += f" ({el}s)"
-                if note:
-                    actual += f" — {note}"
                 writer.writerow({
-                    "step": f"{des} / {cmb}",
-                    "expect_result": "Tryon thành công",
-                    "actual_result": actual,
+                    "no":              i,
+                    "tc_id":           des,
+                    "step":            cmb,
+                    "expected_result": "Tryon thành công",
+                    "actual_result":   note,
+                    "status":          _clean_status(sta),
+                    "duration":        f"{el}s" if el else "",
                 })

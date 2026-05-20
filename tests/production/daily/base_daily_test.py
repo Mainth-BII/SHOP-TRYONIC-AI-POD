@@ -18,6 +18,20 @@ def parse_int(val) -> int | None:
     return int(digits) if digits else None
 
 
+def _clean_status(s: str) -> str:
+    s = str(s)
+    if "PASS" in s: return "PASS"
+    if "FAIL" in s: return "FAIL"
+    if "WARN" in s: return "WARN"
+    if "SKIP" in s: return "SKIP"
+    return s
+
+
+def _extract_duration(s: str) -> str:
+    m = re.search(r"(\d+\.?\d*)\s*s\b", str(s))
+    return m.group(0) if m else ""
+
+
 class BaseDailyTest:
     """Subclass phải khai báo:
       _SUITE_NAME  = "PRICE_CHECKOUT"     # dùng trong tên file report
@@ -162,17 +176,22 @@ class BaseDailyTest:
 
         # ── CSV report ───────────────────────────────────────────────────────
         csv_path = filepath.replace(".md", ".csv")
+        fields = ["no", "tc_id", "step", "expected_result", "actual_result", "status", "duration"]
         with open(csv_path, "w", encoding="utf-8-sig", newline="") as f:
-            writer = csv.DictWriter(f, fieldnames=["step", "expect_result", "actual_result"])
+            writer = csv.DictWriter(f, fieldnames=fields)
             writer.writeheader()
-            for r in results:
-                mh   = str(r["mh"]).replace("\n", " ")
-                chk  = str(r["check"]).replace("\n", " ")
-                sta  = str(r["status"]).replace("\n", " ")
-                act  = str(r.get("actual", "")).replace("\n", " / ") or ""
-                exp  = str(r.get("expected", "")).replace("\n", " ") or ""
+            for i, r in enumerate(results, 1):
+                mh  = str(r["mh"]).replace("\n", " ")
+                chk = str(r["check"]).replace("\n", " ")
+                sta = str(r["status"]).replace("\n", " ")
+                act = str(r.get("actual", "")).replace("\n", " / ")
+                exp = str(r.get("expected", "")).replace("\n", " ")
                 writer.writerow({
-                    "step": f"{mh} — {chk}",
-                    "expect_result": exp,
-                    "actual_result": f"{sta}: {act}" if act else sta,
+                    "no":              i,
+                    "tc_id":           mh,
+                    "step":            chk,
+                    "expected_result": exp,
+                    "actual_result":   act,
+                    "status":          _clean_status(sta),
+                    "duration":        _extract_duration(act),
                 })

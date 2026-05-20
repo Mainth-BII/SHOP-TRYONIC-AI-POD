@@ -104,23 +104,34 @@ jobs:
           import xml.etree.ElementTree as ET, csv, os
           src = "tests/test_reports/junit.xml"
           dst = "tests/test_reports/report.csv"
+          fields = ["no", "feature", "test_case", "browser", "expected_result", "actual_result", "status", "duration"]
           if not os.path.exists(src):
               open(dst, "w").close()
           else:
               tree = ET.parse(src)
               with open(dst, "w", newline="", encoding="utf-8-sig") as f:
-                  w = csv.DictWriter(f, fieldnames=["step", "expect_result", "actual_result"])
+                  w = csv.DictWriter(f, fieldnames=fields)
                   w.writeheader()
-                  for case in tree.getroot().iter("testcase"):
-                      name = f"{case.get('classname','')}.{case.get('name','')}"
-                      fail  = case.find("failure")
-                      err   = case.find("error")
-                      skip  = case.find("skipped")
-                      if fail  is not None: actual = "❌ FAIL: "  + (fail.get("message","") or "")[:200]
-                      elif err is not None: actual = "❌ ERROR: " + (err.get("message","")  or "")[:200]
-                      elif skip is not None: actual = "⏭️ SKIP: " + (skip.get("message","") or "")[:100]
-                      else: actual = "✅ PASS"
-                      w.writerow({"step": name, "expect_result": "PASS", "actual_result": actual})
+                  for i, case in enumerate(tree.getroot().iter("testcase"), 1):
+                      cls_parts = case.get("classname", "").split(".")
+                      feature   = cls_parts[-2].replace("test_", "") if len(cls_parts) >= 2 else cls_parts[-1]
+                      raw_name  = case.get("name", "")
+                      if "[" in raw_name:
+                          tc_name = raw_name.split("[")[0].replace("test_", "").replace("_", " ")
+                          browser = raw_name.split("[")[1].rstrip("]")
+                      else:
+                          tc_name = raw_name.replace("test_", "").replace("_", " ")
+                          browser = "chromium"
+                      time_val = case.get("time", "")
+                      duration = f"{float(time_val):.1f}s" if time_val else ""
+                      fail = case.find("failure"); err = case.find("error"); skip = case.find("skipped")
+                      if fail  is not None: actual = (fail.get("message","") or "")[:200]; status = "FAIL"
+                      elif err is not None: actual = (err.get("message","")  or "")[:200]; status = "ERROR"
+                      elif skip is not None: actual = (skip.get("message","") or "")[:100]; status = "SKIP"
+                      else: actual = ""; status = "PASS"
+                      w.writerow({"no": i, "feature": feature, "test_case": tc_name,
+                                  "browser": browser, "expected_result": "PASS",
+                                  "actual_result": actual, "status": status, "duration": duration})
           print("✅ Converted to", dst)
           EOF
 

@@ -10,6 +10,15 @@ from datetime import datetime
 from typing import ClassVar
 
 
+def _clean_status(s: str) -> str:
+    s = str(s)
+    if "PASS" in s: return "PASS"
+    if "FAIL" in s: return "FAIL"
+    if "WARN" in s: return "WARN"
+    if "SKIP" in s: return "SKIP"
+    return s
+
+
 class BasePrintTechTest:
     _SUITE_NAME: str = "PRINT_TECH"
     _REPORT_TITLE: str = "Daily Print Tech: AI Gợi ý Công nghệ in"
@@ -105,24 +114,22 @@ class BasePrintTechTest:
 
         # ── CSV report ───────────────────────────────────────────────────────
         csv_path = filepath.replace(".md", ".csv")
+        fields = ["no", "tc_id", "step", "expected_result", "actual_result", "status", "duration"]
         with open(csv_path, "w", encoding="utf-8-sig", newline="") as f:
-            writer = csv.DictWriter(f, fieldnames=["step", "expect_result", "actual_result"])
+            writer = csv.DictWriter(f, fieldnames=fields)
             writer.writeheader()
-            for r in results:
+            for i, r in enumerate(results, 1):
                 des  = str(r["design"])
                 sta  = str(r["status"])
                 tech = str(r.get("tech", ""))
                 note = str(r.get("note", ""))
                 el   = r.get("elapsed", 0.0)
-                actual = sta
-                if tech:
-                    actual += f" → {tech}"
-                if el:
-                    actual += f" ({el}s)"
-                if note:
-                    actual += f" — {note}"
                 writer.writerow({
-                    "step": des,
-                    "expect_result": "AI gợi ý công nghệ in thành công",
-                    "actual_result": actual,
+                    "no":              i,
+                    "tc_id":           des,
+                    "step":            "AI gợi ý công nghệ in",
+                    "expected_result": "AI gợi ý thành công",
+                    "actual_result":   tech or note,
+                    "status":          _clean_status(sta),
+                    "duration":        f"{el}s" if el else "",
                 })

@@ -13,9 +13,10 @@ def _save_daily_reports():
     from production.daily.test_artwork import TestDailyArtwork
     from production.daily.test_header import TestDailyHeader
     from production.daily.test_footer import TestDailyFooter
+    from production.daily.test_profile import TestDailyProfile
 
     for cls in (TestDailyPriceCheckout, TestDailySizeGuide, TestDailyCheckoutSummary,
                 TestDailyTryon, TestDailyPrintTech, TestDailyArtwork,
-                TestDailyHeader, TestDailyFooter):
+                TestDailyHeader, TestDailyFooter, TestDailyProfile):
         if cls._results:
             cls._save_report()

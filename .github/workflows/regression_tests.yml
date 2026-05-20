@@ -97,13 +97,41 @@ jobs:
             --tb=short \
             --json-report --json-report-file=tests/test_reports/.report.json
 
+      - name: Convert junit.xml to CSV
+        if: always()
+        run: |
+          python - <<'EOF'
+          import xml.etree.ElementTree as ET, csv, os
+          src = "tests/test_reports/junit.xml"
+          dst = "tests/test_reports/report.csv"
+          if not os.path.exists(src):
+              open(dst, "w").close()
+          else:
+              tree = ET.parse(src)
+              with open(dst, "w", newline="", encoding="utf-8-sig") as f:
+                  w = csv.DictWriter(f, fieldnames=["step", "expect_result", "actual_result"])
+                  w.writeheader()
+                  for case in tree.getroot().iter("testcase"):
+                      name = f"{case.get('classname','')}.{case.get('name','')}"
+                      fail  = case.find("failure")
+                      err   = case.find("error")
+                      skip  = case.find("skipped")
+                      if fail  is not None: actual = "❌ FAIL: "  + (fail.get("message","") or "")[:200]
+                      elif err is not None: actual = "❌ ERROR: " + (err.get("message","")  or "")[:200]
+                      elif skip is not None: actual = "⏭️ SKIP: " + (skip.get("message","") or "")[:100]
+                      else: actual = "✅ PASS"
+                      w.writerow({"step": name, "expect_result": "PASS", "actual_result": actual})
+          print("✅ Converted to", dst)
+          EOF
+
       - name: Upload Test Reports & Screenshots
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-results-${{ github.run_id }}
           path: |
-            tests/test_reports/
+            tests/test_reports/report.csv
+            tests/test_reports/.report.json
             screenshots/
             test-results/
           retention-days: 7

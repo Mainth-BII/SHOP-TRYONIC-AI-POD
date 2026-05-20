@@ -1,4 +1,4 @@
-"""Daily smoke: AI Tạo Artwork — Home → prompt → Studio → gen ≥ 1 ảnh → canvas render."""
+"""Daily smoke: AI Tạo Artwork — Home → prompt → Studio → gen ≥ 1 ảnh mới → canvas render."""
 import json
 import os
 from datetime import date
@@ -46,7 +46,7 @@ class TestDailyArtwork(BaseDailyTest):
         self.page.wait_for_timeout(3_000)
 
     def test_artwork_smoke(self):
-        """Login → Home → nhập prompt ngày hôm nay → AI gen → ≥ 1 ảnh → click variant → canvas."""
+        """Login → Home → Studio (chọn sản phẩm) → nhập prompt → AI gen → đo thời gian → canvas."""
         self._login()
 
         # ── 1. Load prompt hôm nay ───────────────────────────────────────────
@@ -57,13 +57,11 @@ class TestDailyArtwork(BaseDailyTest):
         self.home.navigate()
         self._shot(TC, "1", "home_loaded")
 
-        # Sau khi login: home có thể hiện prompt input (guest flow)
-        # hoặc nút "Tạo ngay"/"Bắt đầu thiết kế" → navigate thẳng vào Studio
+        # Sau khi login: home có thể hiện prompt input hoặc không
         if self.home.prompt_input.is_visible(timeout=5_000):
-            # Luồng có prompt input trên home
             self.home.fill_prompt(prompt)
             self.page.wait_for_timeout(500)
-            self._shot(TC, "2", "prompt_filled")
+            self._shot(TC, "2", "prompt_filled_home")
             self.home.click_generate()
             try:
                 self.page.wait_for_url("**/studio**", timeout=20_000)
@@ -73,10 +71,9 @@ class TestDailyArtwork(BaseDailyTest):
             in_studio = "studio" in self.page.url
             prompt_in_studio = False
         else:
-            # Luồng logged-in: không có prompt input trên home → navigate thẳng vào Studio
             self._shot(TC, "2", "home_no_prompt_input")
             self.studio.navigate()
-            self.page.wait_for_timeout(2_000)
+            self.page.wait_for_timeout(1_000)
             in_studio = "studio" in self.page.url
             prompt_in_studio = True
 
@@ -87,35 +84,51 @@ class TestDailyArtwork(BaseDailyTest):
             self._shot(TC, "3", "studio_fail")
             pytest.fail(f"Không navigate được vào Studio — URL: {self.page.url}")
 
-        self.studio.accept_terms()
-        self._shot(TC, "3", "studio_loaded")
+        # ── 3. Accept terms + chọn sản phẩm (double-click) ──────────────────
+        # navigate() đã gọi ready() rồi; nếu vào từ home thì gọi thủ công
+        if prompt_in_studio is False:
+            self.studio.ready()
+        self._shot(TC, "3", "studio_after_product_select")
 
-        # Nếu chưa nhập prompt (vào studio qua nút Tạo ngay) → nhập tại Studio
+        # ── 4. Nhập prompt trong Studio (nếu chưa nhập ở home) ───────────────
+        # Ghi số ảnh hiện có TRƯỚC khi gen → đo ảnh MỚI
+        baseline = self.studio.artwork_images.count()
+        self._record_check(TC, "Baseline artworks", "✅ PASS",
+                           f"{baseline} ảnh cũ trong library")
+
         if prompt_in_studio:
             self.studio.generate(prompt)
             self.page.wait_for_timeout(1_000)
-            self._shot(TC, "3b", "prompt_in_studio")
+            self._shot(TC, "3b", "prompt_submitted_studio")
+        else:
+            # Prompt đã được gửi từ home → studio đang xử lý
+            self._shot(TC, "3b", "studio_processing_home_prompt")
 
-        # ── 3. Chờ AI tạo artwork, đo thời gian ─────────────────────────────
-        ok, elapsed, found = self.studio.wait_for_artworks(count=1, timeout=120)
-        self._record_check(TC, "AI tạo artwork",
-                           "✅ PASS" if ok else "⚠️ WARN",
-                           f"{found} ảnh ({elapsed}s)")
-        self._shot(TC, "4", f"artworks_{found}imgs")
+        # ── 5. Chờ AI tạo artwork MỚI, đo thời gian ─────────────────────────
+        ok, elapsed, total, new_count = self.studio.wait_for_new_artworks(
+            baseline=baseline, min_new=1, timeout=120
+        )
+        status_gen = "✅ PASS" if ok else "⚠️ WARN"
+        self._record_check(TC, "AI tạo artwork mới",
+                           status_gen,
+                           f"{new_count} ảnh mới ({elapsed}s) — tổng: {total}")
+        self._shot(TC, "4", f"new_artworks_{new_count}imgs_{elapsed}s")
 
-        if not ok or found == 0:
-            pytest.fail(f"AI không tạo được artwork sau {elapsed}s")
+        if not ok or new_count == 0:
+            pytest.fail(f"AI không tạo được artwork mới sau {elapsed}s (baseline={baseline})")
 
-        # ── 4. Click variant → chờ canvas render ────────────────────────────
-        clicked = self.studio.click_artwork(index=0)
+        # ── 6. Click artwork mới → chờ hiển thị lên canvas áo ───────────────
+        # Click vào artwork đầu tiên mới nhất (index = baseline trong library)
+        clicked = self.studio.click_artwork(index=baseline)
         self._record_check(TC, "Click artwork variant",
                            "✅ PASS" if clicked else "⚠️ WARN",
-                           "đã click variant" if clicked else "không click được")
+                           "đã click artwork mới" if clicked else "không click được")
+        self._shot(TC, "5", "after_click_artwork")
 
         if clicked:
             canvas_elapsed = self.studio.wait_for_canvas_artwork(timeout=30, poll_ms=500)
             canvas_ok = canvas_elapsed >= 0
-            self._record_check(TC, "Artwork render trên canvas",
+            self._record_check(TC, "Artwork render trên canvas áo",
                                "✅ PASS" if canvas_ok else "⚠️ WARN",
-                               f"{canvas_elapsed}s" if canvas_ok else "timeout")
-            self._shot(TC, "5", "canvas_render")
+                               f"hiện lên sau {canvas_elapsed}s" if canvas_ok else "timeout")
+            self._shot(TC, "6", "canvas_artwork_on_shirt")

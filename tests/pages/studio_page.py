@@ -105,35 +105,72 @@ class StudioPage(BasePage):
 
     def navigate(self, category_id: str = "t-shirts") -> None:
         self.goto(f"/studio?category={category_id}")
-        self.accept_terms()
-        self._select_first_product()
+        self.ready()
 
-    def _select_first_product(self) -> None:
-        """Nếu xuất hiện dialog 'Chọn sản phẩm', click sản phẩm đầu tiên."""
+    def ready(self) -> None:
+        """Xử lý toàn bộ setup sau khi navigate vào studio: terms + chọn sản phẩm."""
+        self.accept_terms()
+        self.select_product_if_needed()
+
+    def select_product_if_needed(self) -> bool:
+        """Nếu xuất hiện dialog 'Chọn sản phẩm', double-click sản phẩm đầu tiên.
+        Trả về True nếu dialog đã được xử lý, False nếu không có dialog."""
         try:
             title_loc = self.page.locator("text='Chọn sản phẩm'")
-            if not title_loc.is_visible(timeout=4_000):
-                return
-            # Tìm dialog container theo role hoặc class
-            dialog = self.page.locator(
-                "[role='dialog'], [class*='modal' i], [class*='Modal'], "
-                "[class*='overlay' i], [class*='Overlay']"
-            ).last
-            if dialog.is_visible(timeout=2_000):
-                first_card = dialog.locator("img[src]").first
-                first_card.click()
-            else:
-                # Fallback: click text của sản phẩm đầu tiên trong dialog vùng giữa màn hình
-                self.page.evaluate("""() => {
-                    const el = Array.from(document.querySelectorAll('img[src]')).find(img => {
-                        const r = img.getBoundingClientRect();
-                        return r.left > 100 && r.top > 100 && r.width > 60;
+            if not title_loc.is_visible(timeout=5_000):
+                return False
+
+            # JS: walk từ heading lên đến modal container, tìm product card nhỏ nhất
+            result = self.page.evaluate("""() => {
+                const heading = Array.from(document.querySelectorAll('*')).find(
+                    el => el.childElementCount === 0
+                       && el.textContent.trim() === 'Chọn sản phẩm'
+                );
+                if (!heading) return 'no-heading';
+
+                // Walk up đến container chứa ít nhất 2 ảnh sản phẩm
+                let modal = heading.parentElement;
+                for (let i = 0; i < 10 && modal && modal !== document.body; i++) {
+                    if (modal.querySelectorAll('img[src]').length >= 2) break;
+                    modal = modal.parentElement;
+                }
+                if (!modal || modal === document.body) return 'no-modal';
+
+                // Tìm card: phần tử chứa img, size 100-400 x 150-600px
+                const cards = Array.from(modal.querySelectorAll('div, button, a, li'))
+                    .filter(el => {
+                        if (!el.querySelector('img[src]')) return false;
+                        const r = el.getBoundingClientRect();
+                        return r.width >= 100 && r.width <= 420
+                            && r.height >= 150 && r.height <= 600;
+                    })
+                    .sort((a, b) => {
+                        const ra = a.getBoundingClientRect();
+                        const rb = b.getBoundingClientRect();
+                        return (ra.width * ra.height) - (rb.width * rb.height);
                     });
-                    if (el) el.click();
-                }""")
+
+                if (cards.length === 0) return 'no-cards';
+
+                const card = cards[0];
+                const r = card.getBoundingClientRect();
+                // Double-click để chọn sản phẩm
+                card.dispatchEvent(new MouseEvent('click',   {bubbles: true, cancelable: true}));
+                card.dispatchEvent(new MouseEvent('dblclick',{bubbles: true, cancelable: true}));
+                return `dblclicked:${Math.round(r.width)}x${Math.round(r.height)}`;
+            }""")
+            print(f"  [INFO] select_product: {result}")
+
+            # Chờ dialog đóng
+            try:
+                title_loc.wait_for(state="hidden", timeout=8_000)
+            except Exception:
+                pass
             self.page.wait_for_timeout(2_000)
-        except Exception:
-            pass
+            return True
+        except Exception as e:
+            print(f"  [WARN] select_product_if_needed error: {e}")
+            return False
 
     def generate(self, prompt: str) -> None:
         inp = self.prompt_input
@@ -202,6 +239,25 @@ class StudioPage(BasePage):
         elapsed = round(time.time() - start, 1)
         found = self.artwork_images.count()
         return found >= count, elapsed, found
+
+    def wait_for_new_artworks(self, baseline: int = 0, min_new: int = 1,
+                              timeout: int = 120) -> tuple:
+        """Chờ AI tạo ít nhất `min_new` ảnh MỚI (so với baseline).
+        Đo thời gian từ lúc gọi đến lúc count > baseline.
+        Trả về (success, elapsed_seconds, total_found, new_count).
+        """
+        import time
+        start = time.time()
+        deadline = start + timeout
+        while time.time() < deadline:
+            current = self.artwork_images.count()
+            if current > baseline and (current - baseline) >= min_new:
+                break
+            self.page.wait_for_timeout(2_000)
+        elapsed = round(time.time() - start, 1)
+        total = self.artwork_images.count()
+        new_count = max(0, total - baseline)
+        return new_count >= min_new, elapsed, total, new_count
 
     def click_artwork(self, index: int = 0) -> bool:
         """Click ảnh từ left library panel (x < 330px) bằng JS position-based detection."""

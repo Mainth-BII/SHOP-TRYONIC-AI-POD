@@ -91,10 +91,10 @@ class TestDailyArtwork(BaseDailyTest):
         self._shot(TC, "3", "studio_after_product_select")
 
         # ── 4. Nhập prompt trong Studio (nếu chưa nhập ở home) ───────────────
-        # Ghi số ảnh hiện có TRƯỚC khi gen → đo ảnh MỚI
-        baseline = self.studio.artwork_images.count()
-        self._record_check(TC, "Baseline artworks", "✅ PASS",
-                           f"{baseline} ảnh cũ trong library")
+        # Ghi số ảnh hiện có TRONG CHAT PANEL (bên phải) trước khi gen → đo ảnh MỚI
+        baseline = self.studio._count_chat_artworks()
+        self._record_check(TC, "Baseline artworks (chat)", "✅ PASS",
+                           f"{baseline} ảnh cũ trong chat panel")
 
         if prompt_in_studio:
             self.studio.generate(prompt)
@@ -118,8 +118,8 @@ class TestDailyArtwork(BaseDailyTest):
             pytest.fail(f"AI không tạo được artwork mới sau {elapsed}s (baseline={baseline})")
 
         # ── 6. Click artwork mới → chờ hiển thị lên canvas áo ───────────────
-        # Click vào artwork đầu tiên mới nhất (index = baseline trong library)
-        clicked = self.studio.click_artwork(index=baseline)
+        # click_artwork dùng left library panel → index 0 là ảnh mới nhất (skip 'Thêm ảnh')
+        clicked = self.studio.click_artwork(index=0)
         self._record_check(TC, "Click artwork variant",
                            "✅ PASS" if clicked else "⚠️ WARN",
                            "đã click artwork mới" if clicked else "không click được")

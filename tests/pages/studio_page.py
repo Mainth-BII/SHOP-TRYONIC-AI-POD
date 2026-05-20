@@ -240,24 +240,40 @@ class StudioPage(BasePage):
         found = self.artwork_images.count()
         return found >= count, elapsed, found
 
+    def _count_chat_artworks(self) -> int:
+        """Đếm artwork trong AI chat panel (bên phải màn hình).
+        Threshold 65% viewport để bỏ qua thumbnail canvas/product preview."""
+        try:
+            return self.page.evaluate("""() => {
+                const vw = window.innerWidth;
+                const threshold = vw * 0.65;
+                return Array.from(document.querySelectorAll('img[src]')).filter(img => {
+                    const r = img.getBoundingClientRect();
+                    return r.x > threshold && r.width >= 80 && r.height >= 80
+                        && img.complete && img.naturalWidth > 0;
+                }).length;
+            }""")
+        except Exception:
+            return 0
+
     def wait_for_new_artworks(self, baseline: int = 0, min_new: int = 1,
                               timeout: int = 120) -> tuple:
-        """Chờ AI tạo ít nhất `min_new` ảnh MỚI (so với baseline).
-        Đo thời gian từ lúc gọi đến lúc count > baseline.
-        Trả về (success, elapsed_seconds, total_found, new_count).
+        """Chờ AI tạo ít nhất `min_new` ảnh MỚI trong chat panel bên phải.
+        baseline = số ảnh trong chat panel TRƯỚC khi gen (thường = 0).
+        Trả về (success, elapsed_seconds, chat_count, new_count).
         """
         import time
         start = time.time()
         deadline = start + timeout
         while time.time() < deadline:
-            current = self.artwork_images.count()
+            current = self._count_chat_artworks()
             if current > baseline and (current - baseline) >= min_new:
                 break
             self.page.wait_for_timeout(2_000)
         elapsed = round(time.time() - start, 1)
-        total = self.artwork_images.count()
-        new_count = max(0, total - baseline)
-        return new_count >= min_new, elapsed, total, new_count
+        chat_count = self._count_chat_artworks()
+        new_count = max(0, chat_count - baseline)
+        return new_count >= min_new, elapsed, chat_count, new_count
 
     def click_artwork(self, index: int = 0) -> bool:
         """Click ảnh từ left library panel (x < 330px) bằng JS position-based detection."""

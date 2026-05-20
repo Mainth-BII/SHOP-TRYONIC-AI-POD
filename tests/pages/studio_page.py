@@ -71,6 +71,24 @@ class StudioPage(BasePage):
         return self.page.locator("button:has-text('Mặt trước'), button:has-text('Mat truoc')").first
 
     @property
+    def product_name_button(self) -> Locator:
+        """Nút hiển thị tên sản phẩm hiện tại ở bottom bar (dùng để đổi loại áo)."""
+        return self.page.locator(
+            "button:has-text('Áo Phông'), button:has-text('Áo phông'), "
+            "button:has-text('Ao Phong'), button:has-text('áo')"
+        ).first
+
+    @property
+    def color_dot_buttons(self) -> Locator:
+        """Các ô màu (color swatches) để đổi màu áo."""
+        return self.page.locator(
+            "button[style*='background'], button[style*='background-color'], "
+            "[class*='color-dot'], [class*='ColorDot'], "
+            "[class*='color-swatch'], [class*='ColorSwatch'], "
+            "button:has([style*='background'])"
+        )
+
+    @property
     def category_selector(self) -> Locator:
         return self.page.locator(
             "button:has-text('Áo Thun'), button:has-text('T-Shirt'), "
@@ -349,6 +367,179 @@ class StudioPage(BasePage):
                 self.page.wait_for_timeout(1000)
         except Exception:
             pass  # Library đã mở sẵn, bỏ qua
+
+    def dismiss_color_tooltip(self) -> None:
+        """Đóng tooltip 'Đổi màu áo tại đây' nếu đang hiển thị."""
+        try:
+            self.page.evaluate("""() => {
+                const all = Array.from(document.querySelectorAll('*'));
+                const tooltip = all.find(
+                    el => el.innerText && el.innerText.includes('Đổi màu áo tại đây')
+                        && el.getBoundingClientRect().width > 0
+                );
+                if (!tooltip) return;
+                // Click nút X đóng tooltip
+                const closeBtn = Array.from(tooltip.querySelectorAll('button, [class*="close" i]'))
+                    .find(b => b.getBoundingClientRect().width > 0);
+                if (closeBtn) { closeBtn.click(); return; }
+                // Fallback: thử click parent
+                tooltip.closest('[class*="tooltip" i], [class*="popup" i], [class*="banner" i]')?.remove();
+            }""")
+            self.page.wait_for_timeout(600)
+        except Exception:
+            pass
+
+    def get_product_name(self) -> str:
+        """Lấy tên sản phẩm từ button cùng hàng với 'Hoàn tất thiết kế'."""
+        try:
+            return self.page.evaluate("""() => {
+                const finish = Array.from(document.querySelectorAll('button')).find(
+                    b => b.innerText && b.innerText.includes('Hoàn tất')
+                );
+                if (!finish) return '';
+                const fr = finish.getBoundingClientRect();
+                const productBtn = Array.from(document.querySelectorAll('button')).find(b => {
+                    if (b === finish) return false;
+                    const r = b.getBoundingClientRect();
+                    return Math.abs(r.y - fr.y) < 30 && r.x < fr.x && r.width > 30
+                        && b.innerText.trim().length > 0;
+                });
+                return productBtn ? productBtn.innerText.trim() : '';
+            }""") or ""
+        except Exception:
+            return ""
+
+    def change_product_type(self, index: int = 1) -> tuple:
+        """Mở dialog Chọn sản phẩm → double-click sản phẩm tại `index`.
+        Trả về (success, old_name, new_name).
+        """
+        self.dismiss_color_tooltip()
+        old_name = self.get_product_name()
+
+        try:
+            # JS: tìm button cùng hàng với "Hoàn tất" → click để mở dialog
+            clicked = self.page.evaluate("""() => {
+                const finish = Array.from(document.querySelectorAll('button')).find(
+                    b => b.innerText && b.innerText.includes('Hoàn tất')
+                );
+                if (!finish) return 'no-finish-btn';
+                const fr = finish.getBoundingClientRect();
+                const productBtn = Array.from(document.querySelectorAll('button')).find(b => {
+                    if (b === finish) return false;
+                    const r = b.getBoundingClientRect();
+                    return Math.abs(r.y - fr.y) < 30 && r.x < fr.x && r.width > 30
+                        && b.innerText.trim().length > 0;
+                });
+                if (!productBtn) return 'no-product-btn';
+                productBtn.click();
+                return 'clicked:' + productBtn.innerText.trim();
+            }""")
+            print(f"  [INFO] open product selector: {clicked}")
+            self.page.wait_for_timeout(1_500)
+
+            # Dialog Chọn sản phẩm đã mở → chọn sản phẩm tại index
+            title_loc = self.page.locator("text='Chọn sản phẩm'")
+            if not title_loc.is_visible(timeout=5_000):
+                return False, old_name, old_name
+
+            result = self.page.evaluate(f"""() => {{
+                const heading = Array.from(document.querySelectorAll('*')).find(
+                    el => el.childElementCount === 0
+                       && el.textContent.trim() === 'Chọn sản phẩm'
+                );
+                if (!heading) return 'no-heading';
+                let modal = heading.parentElement;
+                for (let i = 0; i < 10 && modal && modal !== document.body; i++) {{
+                    if (modal.querySelectorAll('img[src]').length >= 2) break;
+                    modal = modal.parentElement;
+                }}
+                if (!modal || modal === document.body) return 'no-modal';
+                const cards = Array.from(modal.querySelectorAll('div, button, a, li'))
+                    .filter(el => {{
+                        if (!el.querySelector('img[src]')) return false;
+                        const r = el.getBoundingClientRect();
+                        return r.width >= 100 && r.width <= 420
+                            && r.height >= 150 && r.height <= 600;
+                    }})
+                    .sort((a, b) => {{
+                        const ra = a.getBoundingClientRect();
+                        const rb = b.getBoundingClientRect();
+                        return (ra.width * ra.height) - (rb.width * rb.height);
+                    }});
+                if (cards.length <= {index}) return 'not-enough-cards:' + cards.length;
+                const card = cards[{index}];
+                card.dispatchEvent(new MouseEvent('click',   {{bubbles: true, cancelable: true}}));
+                card.dispatchEvent(new MouseEvent('dblclick',{{bubbles: true, cancelable: true}}));
+                return 'ok:' + cards.length + 'cards';
+            }}""")
+            print(f"  [INFO] change_product_type index={index}: {result}")
+
+            try:
+                title_loc.wait_for(state="hidden", timeout=8_000)
+            except Exception:
+                pass
+            self.page.wait_for_timeout(2_000)
+            new_name = self.get_product_name()
+            return True, old_name, new_name
+        except Exception as e:
+            print(f"  [WARN] change_product_type error: {e}")
+            return False, old_name, ""
+
+    def get_color_swatches(self) -> list:
+        """Lấy danh sách color swatch trong bottom bar (cùng hàng với nút 'Hoàn tất')."""
+        try:
+            return self.page.evaluate("""() => {
+                const finish = Array.from(document.querySelectorAll('button')).find(
+                    b => b.innerText && b.innerText.includes('Hoàn tất')
+                );
+                const refY = finish ? finish.getBoundingClientRect().y : window.innerHeight * 0.88;
+
+                return Array.from(document.querySelectorAll('button, div, span')).filter(el => {
+                    const style = window.getComputedStyle(el);
+                    const bg = style.backgroundColor;
+                    const r = el.getBoundingClientRect();
+                    return bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent'
+                        && r.width >= 14 && r.width <= 48 && r.height >= 14 && r.height <= 48
+                        && Math.abs(r.y - refY) < 50 && r.width > 0;
+                }).map((el, i) => ({
+                    index: i,
+                    bg: window.getComputedStyle(el).backgroundColor,
+                    rect: {x: Math.round(el.getBoundingClientRect().x), y: Math.round(el.getBoundingClientRect().y)}
+                }));
+            }""") or []
+        except Exception:
+            return []
+
+    def select_color_by_index(self, index: int = 1) -> tuple:
+        """Click color swatch tại `index` trong bottom bar.
+        Trả về (success, color_bg).
+        """
+        try:
+            result = self.page.evaluate(f"""() => {{
+                const finish = Array.from(document.querySelectorAll('button')).find(
+                    b => b.innerText && b.innerText.includes('Hoàn tất')
+                );
+                const refY = finish ? finish.getBoundingClientRect().y : window.innerHeight * 0.88;
+
+                const swatches = Array.from(document.querySelectorAll('button, div, span')).filter(el => {{
+                    const style = window.getComputedStyle(el);
+                    const bg = style.backgroundColor;
+                    const r = el.getBoundingClientRect();
+                    return bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent'
+                        && r.width >= 14 && r.width <= 48 && r.height >= 14 && r.height <= 48
+                        && Math.abs(r.y - refY) < 50 && r.width > 0;
+                }});
+                if (swatches.length <= {index}) return null;
+                const el = swatches[{index}];
+                el.click();
+                return window.getComputedStyle(el).backgroundColor;
+            }}""")
+            if result:
+                self.page.wait_for_timeout(1_500)
+                return True, result
+        except Exception as e:
+            print(f"  [WARN] select_color_by_index error: {e}")
+        return False, ""
 
     def open_order_modal(self) -> None:
         self.order_button.wait_for(state="visible", timeout=15_000)

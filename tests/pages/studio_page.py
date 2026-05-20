@@ -314,7 +314,9 @@ class StudioPage(BasePage):
                 if state.get("matSauVisible") or state.get("canvasChanged") or state.get("matTruocVisible"):
                     elapsed = round(time.time() - start, 2)
                     label = "Mặt sau" if state.get("matSauVisible") else ("canvas changed" if state.get("canvasChanged") else "Mặt trước visible")
-                    print(f"  [INFO] rotate_shirt confirmed: {label} after {elapsed}s")
+                    print(f"  [INFO] rotate_shirt confirmed: {label} after {elapsed}s — chờ animation xong")
+                    # Chờ animation xoay áo hoàn thành trước khi chụp screenshot
+                    self.page.wait_for_timeout(2_500)
                     return True, elapsed, label
             except Exception:
                 pass

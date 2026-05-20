@@ -16,6 +16,8 @@ class StudioPage(BasePage):
     @property
     def prompt_input(self) -> Locator:
         return self.page.locator(
+            "textarea[placeholder*='Mô tả ý tưởng'], textarea[placeholder*='Mo ta y tuong'], "
+            "textarea[placeholder*='Mô tả'], "
             "input[placeholder*='Bạn muốn'], input[placeholder*='ý tưởng'], "
             "textarea[placeholder*='Bạn']"
         ).first
@@ -103,11 +105,48 @@ class StudioPage(BasePage):
 
     def navigate(self, category_id: str = "t-shirts") -> None:
         self.goto(f"/studio?category={category_id}")
-        self.accept_terms()  # Dismiss Terms dialog luôn sau khi load studio
+        self.accept_terms()
+        self._select_first_product()
+
+    def _select_first_product(self) -> None:
+        """Nếu xuất hiện dialog 'Chọn sản phẩm', click sản phẩm đầu tiên."""
+        try:
+            title_loc = self.page.locator("text='Chọn sản phẩm'")
+            if not title_loc.is_visible(timeout=4_000):
+                return
+            # Tìm dialog container theo role hoặc class
+            dialog = self.page.locator(
+                "[role='dialog'], [class*='modal' i], [class*='Modal'], "
+                "[class*='overlay' i], [class*='Overlay']"
+            ).last
+            if dialog.is_visible(timeout=2_000):
+                first_card = dialog.locator("img[src]").first
+                first_card.click()
+            else:
+                # Fallback: click text của sản phẩm đầu tiên trong dialog vùng giữa màn hình
+                self.page.evaluate("""() => {
+                    const el = Array.from(document.querySelectorAll('img[src]')).find(img => {
+                        const r = img.getBoundingClientRect();
+                        return r.left > 100 && r.top > 100 && r.width > 60;
+                    });
+                    if (el) el.click();
+                }""")
+            self.page.wait_for_timeout(2_000)
+        except Exception:
+            pass
 
     def generate(self, prompt: str) -> None:
-        self.prompt_input.fill(prompt)
-        self.generate_button.click()
+        inp = self.prompt_input
+        inp.fill(prompt)
+        # Thử click nút generate; nếu không tìm thấy, dùng Enter để submit chat
+        try:
+            btn = self.generate_button
+            if btn.is_visible(timeout=2_000):
+                btn.click()
+                return
+        except Exception:
+            pass
+        inp.press("Enter")
 
     def select_color(self, name: str) -> bool:
         """Tìm và click color swatch theo text, aria-label, title, data-color."""

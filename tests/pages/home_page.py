@@ -19,6 +19,8 @@ class HomePage(BasePage):
     @property
     def prompt_input(self) -> Locator:
         return self.page.locator(
+            "textarea.hero-chat-textarea, "
+            "textarea[placeholder*='Mô tả'], textarea[placeholder*='Mo ta'], "
             "input[placeholder*='Bạn muốn'], input[placeholder*='Ban muon'], "
             "input[placeholder*='ý tưởng'], input[placeholder*='y tuong'], "
             "textarea[placeholder*='Bạn'], textarea[placeholder*='ý tưởng']"

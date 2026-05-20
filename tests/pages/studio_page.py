@@ -485,22 +485,100 @@ class StudioPage(BasePage):
             print(f"  [WARN] change_product_type error: {e}")
             return False, old_name, ""
 
+    def _find_buttons_in_bottom_bar(self) -> dict:
+        """Tìm các nút trong bottom bar theo vị trí tương đối."""
+        return self.page.evaluate("""() => {
+            const finish = Array.from(document.querySelectorAll('button')).find(
+                b => b.innerText && b.innerText.includes('Hoàn tất')
+            );
+            if (!finish) return null;
+            const fr = finish.getBoundingClientRect();
+            const barY = fr.y;
+
+            // Tất cả buttons trong cùng hàng với Hoàn tất
+            const barBtns = Array.from(document.querySelectorAll('button')).filter(b => {
+                const r = b.getBoundingClientRect();
+                return Math.abs(r.y - barY) < 35 && r.x < fr.x && r.width > 0;
+            }).sort((a, b) => a.getBoundingClientRect().x - b.getBoundingClientRect().x);
+
+            // Product name btn: rộng nhất, có text dài
+            const productBtn = barBtns.find(b => b.innerText.trim().length > 3);
+            const pr = productBtn?.getBoundingClientRect();
+
+            // Color dropdown btn: nằm giữa product và finish, KHÔNG phải product btn
+            const colorBtn = barBtns.find(b => {
+                if (b === productBtn) return false;
+                const r = b.getBoundingClientRect();
+                return (!pr || r.x > pr.x + pr.width - 20) && r.x + r.width < fr.x + 20;
+            });
+            const cr = colorBtn?.getBoundingClientRect();
+
+            return {
+                finishX: Math.round(fr.x), finishY: Math.round(fr.y),
+                productText: productBtn?.innerText.trim() || '',
+                colorBtnX: cr ? Math.round(cr.x) : -1,
+                colorBtnY: cr ? Math.round(cr.y) : -1,
+                colorBtnW: cr ? Math.round(cr.width) : -1,
+            };
+        }""") or {}
+
+    def open_color_dropdown(self) -> bool:
+        """Click nút color dropdown (●▼) ở bottom bar để mở panel chọn màu."""
+        try:
+            result = self.page.evaluate("""() => {
+                const finish = Array.from(document.querySelectorAll('button')).find(
+                    b => b.innerText && b.innerText.includes('Hoàn tất')
+                );
+                if (!finish) return 'no-finish';
+                const fr = finish.getBoundingClientRect();
+
+                const barBtns = Array.from(document.querySelectorAll('button')).filter(b => {
+                    const r = b.getBoundingClientRect();
+                    return Math.abs(r.y - fr.y) < 35 && r.x < fr.x && r.width > 0;
+                }).sort((a, b) => a.getBoundingClientRect().x - b.getBoundingClientRect().x);
+
+                const productBtn = barBtns.find(b => b.innerText.trim().length > 3);
+                const pr = productBtn?.getBoundingClientRect();
+
+                // Color dropdown: ngay bên phải product btn, nhỏ hơn product btn
+                const colorBtn = barBtns.find(b => {
+                    if (b === productBtn) return false;
+                    const r = b.getBoundingClientRect();
+                    return (!pr || r.x > pr.x + pr.width - 20) && r.x + r.width < fr.x + 20;
+                });
+
+                if (!colorBtn) return 'no-color-btn';
+                colorBtn.click();
+                const r = colorBtn.getBoundingClientRect();
+                return `clicked:${Math.round(r.x)},${Math.round(r.y)},${Math.round(r.width)}`;
+            }""")
+            print(f"  [INFO] open_color_dropdown: {result}")
+            self.page.wait_for_timeout(1_000)
+            return result.startswith("clicked")
+        except Exception as e:
+            print(f"  [WARN] open_color_dropdown: {e}")
+            return False
+
     def get_color_swatches(self) -> list:
-        """Lấy danh sách color swatch trong bottom bar (cùng hàng với nút 'Hoàn tất')."""
+        """Sau khi mở color dropdown, lấy danh sách màu trong panel."""
         try:
             return self.page.evaluate("""() => {
                 const finish = Array.from(document.querySelectorAll('button')).find(
                     b => b.innerText && b.innerText.includes('Hoàn tất')
                 );
-                const refY = finish ? finish.getBoundingClientRect().y : window.innerHeight * 0.88;
+                const fr = finish ? finish.getBoundingClientRect() : {y: window.innerHeight};
 
-                return Array.from(document.querySelectorAll('button, div, span')).filter(el => {
+                // Tìm màu trong panel đã mở (trên bottom bar, có circle shape)
+                return Array.from(document.querySelectorAll('button, div, span, li')).filter(el => {
                     const style = window.getComputedStyle(el);
                     const bg = style.backgroundColor;
+                    const br = parseFloat(style.borderRadius) || 0;
                     const r = el.getBoundingClientRect();
                     return bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent'
-                        && r.width >= 14 && r.width <= 48 && r.height >= 14 && r.height <= 48
-                        && Math.abs(r.y - refY) < 50 && r.width > 0;
+                        && r.width >= 16 && r.width <= 56 && r.height >= 16 && r.height <= 56
+                        && r.y < fr.y - 10  // trên bottom bar
+                        && r.y > 50         // không phải header
+                        && r.width > 0 && r.x > 0 && r.x < window.innerWidth * 0.8;
                 }).map((el, i) => ({
                     index: i,
                     bg: window.getComputedStyle(el).backgroundColor,
@@ -511,32 +589,53 @@ class StudioPage(BasePage):
             return []
 
     def select_color_by_index(self, index: int = 1) -> tuple:
-        """Click color swatch tại `index` trong bottom bar.
+        """Mở color dropdown → chọn màu KHÁC với màu hiện tại (ưu tiên không phải trắng).
         Trả về (success, color_bg).
         """
+        opened = self.open_color_dropdown()
+        if not opened:
+            return False, ""
+
+        self.page.wait_for_timeout(500)
         try:
             result = self.page.evaluate(f"""() => {{
                 const finish = Array.from(document.querySelectorAll('button')).find(
                     b => b.innerText && b.innerText.includes('Hoàn tất')
                 );
-                const refY = finish ? finish.getBoundingClientRect().y : window.innerHeight * 0.88;
+                const fr = finish ? finish.getBoundingClientRect() : {{y: window.innerHeight}};
 
-                const swatches = Array.from(document.querySelectorAll('button, div, span')).filter(el => {{
+                const swatches = Array.from(document.querySelectorAll('button, div, span, li')).filter(el => {{
                     const style = window.getComputedStyle(el);
                     const bg = style.backgroundColor;
                     const r = el.getBoundingClientRect();
                     return bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent'
-                        && r.width >= 14 && r.width <= 48 && r.height >= 14 && r.height <= 48
-                        && Math.abs(r.y - refY) < 50 && r.width > 0;
+                        && r.width >= 16 && r.width <= 56 && r.height >= 16 && r.height <= 56
+                        && r.y < fr.y - 10 && r.y > 50 && r.width > 0
+                        && r.x > 0 && r.x < window.innerWidth * 0.8;
                 }});
-                if (swatches.length <= {index}) return null;
-                const el = swatches[{index}];
-                el.click();
-                return window.getComputedStyle(el).backgroundColor;
+
+                // Ưu tiên màu KHÔNG phải trắng/gần trắng để thấy thay đổi rõ ràng
+                const isNearWhite = bg => {{
+                    const m = bg.match(/rgb\\((\\d+),\\s*(\\d+),\\s*(\\d+)/);
+                    if (!m) return true;
+                    return +m[1] > 240 && +m[2] > 240 && +m[3] > 240;
+                }};
+
+                const nonWhite = swatches.find(el => !isNearWhite(window.getComputedStyle(el).backgroundColor));
+                const target = nonWhite || (swatches.length > {index} ? swatches[{index}] : swatches[0]);
+                if (!target) return 'no-swatches:' + swatches.length;
+
+                const bg = window.getComputedStyle(target).backgroundColor;
+                const r = target.getBoundingClientRect();
+                target.click();
+                return `${{bg}}|${{Math.round(r.x)}},${{Math.round(r.y)}}`;
             }}""")
-            if result:
+            if result and not result.startswith("no-"):
                 self.page.wait_for_timeout(1_500)
-                return True, result
+                color_bg = result.split("|")[0]
+                print(f"  [INFO] color selected: {result}")
+                return True, color_bg
+            print(f"  [WARN] select_color_by_index: {result}")
         except Exception as e:
             print(f"  [WARN] select_color_by_index error: {e}")
         return False, ""

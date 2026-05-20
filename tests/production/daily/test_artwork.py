@@ -145,16 +145,15 @@ class TestDailyArtwork(BaseDailyTest):
         self._shot(TC, "7", f"product_changed_{changed_product}")
 
         # ── 8. Đổi màu áo ───────────────────────────────────────────────────
-        # Lấy danh sách swatches, chọn màu khác với màu đang chọn (index 1)
-        swatches = self.studio.get_color_swatches()
-        self._record_check(TC, "Color swatches found",
-                           "✅ PASS" if swatches else "⚠️ WARN",
-                           f"{len(swatches)} màu tìm thấy")
         self._shot(TC, "8a", "before_color_change")
 
-        if swatches:
-            ok8, chosen_color = self.studio.select_color_by_index(index=1)
-            self._record_check(TC, "Đổi màu áo",
-                               "✅ PASS" if ok8 else "⚠️ WARN",
-                               f"màu đã chọn: {chosen_color}" if ok8 else "không click được")
-            self._shot(TC, "8b", f"color_changed_{ok8}")
+        ok8, chosen_color = self.studio.select_color_by_index(index=1)
+        self._shot(TC, "8b", f"color_changed_{ok8}")
+
+        # Lấy swatches sau khi chọn (panel đã mở) để log
+        after_swatches = self.studio.get_color_swatches()
+        self._record_check(TC, "Đổi màu áo",
+                           "✅ PASS" if ok8 else "⚠️ WARN",
+                           f"màu đã chọn: {chosen_color}" if ok8 else "không click được")
+        if after_swatches:
+            print(f"  [INFO] swatches sau khi chọn màu: {after_swatches[:3]}")

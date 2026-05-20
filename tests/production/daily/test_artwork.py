@@ -1,4 +1,4 @@
-"""Daily smoke: AI Tạo Artwork — Home → prompt → Studio → gen ≥ 1 ảnh mới → canvas render."""
+"""Daily smoke: AI Tạo Artwork — Home → prompt → Studio → gen ≥ 1 ảnh mới → canvas render → xoay mặt sau."""
 import json
 import os
 from datetime import date

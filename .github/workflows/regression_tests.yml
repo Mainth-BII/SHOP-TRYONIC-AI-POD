@@ -143,6 +143,8 @@ jobs:
           path: |
             tests/test_reports/report.csv
             tests/test_reports/.report.json
+            reports/daily/*.csv
+            reports/daily/*.md
             screenshots/
             test-results/
           retention-days: 7

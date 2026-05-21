@@ -54,19 +54,36 @@ class TryonReviewPage(BasePage):
         return urls
 
     def _collect_urls_by_clicking(self, max_n: int) -> list[str]:
-        """Fallback: click từng card → ghi URL → back."""
+        """Fallback: click từng card (dùng onClick router.push) → ghi URL → back."""
         urls = []
         self.goto(MY_DESIGNS_PATH)
-        self.page.wait_for_timeout(2_000)
+        self.page.wait_for_timeout(3_000)
 
-        cards = self.page.locator("main > div > div > div[class]").all()
+        # Detect empty state — tài khoản chưa có design nào
+        try:
+            if self.page.locator(
+                ":text('chưa có thiết kế'), :text('Chưa có thiết kế')"
+            ).is_visible(timeout=2_000):
+                print("  [INFO] Trang thiết kế trống — tài khoản chưa có design nào")
+                return []
+        except Exception:
+            pass
+
+        # Design cards dùng onClick={router.push} — không có <a href>
+        # Thử nhiều selector để bắt được grid card
+        card_sel = (
+            "main [class*='grid'] > div[class*='cursor'], "
+            "main [class*='grid'] > div[class], "
+            "main > div > div > div[class]"
+        )
+        cards = self.page.locator(card_sel).all()
         count = min(len(cards), max_n)
 
         for i in range(count):
             try:
                 self.goto(MY_DESIGNS_PATH)
                 self.page.wait_for_timeout(2_000)
-                cards = self.page.locator("main > div > div > div[class]").all()
+                cards = self.page.locator(card_sel).all()
                 if i >= len(cards):
                     break
                 cards[i].click(timeout=5_000)

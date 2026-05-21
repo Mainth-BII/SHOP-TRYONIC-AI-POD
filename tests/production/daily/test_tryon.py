@@ -41,8 +41,9 @@ class TestDailyTryon(BaseDailyTest):
         # ── 1. Lấy tối đa 5 URL, thử đến khi có 1 design vào được /review ──
         studio_urls = self.tryon.get_studio_urls(max_n=10)
         if not studio_urls:
-            self._record_check(TC, "Tìm design", "❌ FAIL", "0 design", "≥ 1")
-            pytest.fail("Không tìm thấy design nào trong Thiết kế của tôi")
+            self._record_check(TC, "Tìm design", "⚠️ SKIP",
+                               "0 design — tài khoản chưa có thiết kế nào", "≥ 1")
+            pytest.skip("Tài khoản test không có design nào trong Thiết kế của tôi — cần tạo test data")
         self._record_check(TC, "Tìm design", "✅ PASS", f"{len(studio_urls)} design", "≥ 1")
 
         # ── 2. Thử lần lượt đến design nào vào /review VÀ click được Thử lại ──
@@ -73,7 +74,15 @@ class TestDailyTryon(BaseDailyTest):
         # ── 3. Chờ tryon xong → screenshot ──────────────────────────────────
         loaded, elapsed = self.tryon.wait_tryon_done()
         self._record_check(TC, "Tryon Nam hoàn tất",
-                           "✅ PASS" if loaded else "⚠️ WARN",
-                           f"{elapsed}s" if loaded else f"timeout sau {elapsed}s")
+                           "✅ PASS" if loaded else "❌ FAIL",
+                           f"{elapsed}s" if loaded else f"timeout {elapsed}s — Tryon không trả kết quả ảnh")
 
         self._shot(TC, "2", "tryon_nam_result")
+
+        # ══ KẾT QUẢ ══════════════════════════════════════════════════════════
+        failed_checks = [r for r in self._results if "FAIL" in r.get("status", "")]
+        if failed_checks:
+            pytest.fail(
+                f"Tryon có {len(failed_checks)} check FAIL: "
+                + ", ".join(r["check"] for r in failed_checks)
+            )

@@ -9,7 +9,7 @@ from playwright.sync_api import Page
 from .base_daily_test import BaseDailyTest
 
 # Import helpers từ size module (tái dùng, không duplicate)
-from tests.production.size._helpers import (
+from production.size._helpers import (
     open_ai_size_popup,
     submit_recommendation,
     read_recommended_size,

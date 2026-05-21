@@ -40,8 +40,9 @@ class TestDailyPrintTech(BaseDailyTest):
         # ── 1. Lấy tối đa 10 URL, thử đến khi có 1 design vào được /review ──
         studio_urls = self.pt.get_studio_urls(max_n=10)
         if not studio_urls:
-            self._record_check(TC, "Tìm design", "❌ FAIL", "0 design", "≥ 1")
-            pytest.fail("Không tìm thấy design nào trong Thiết kế của tôi")
+            self._record_check(TC, "Tìm design", "⚠️ SKIP",
+                               "0 design — tài khoản chưa có thiết kế nào", "≥ 1")
+            pytest.skip("Tài khoản test không có design nào trong Thiết kế của tôi — cần tạo test data")
         self._record_check(TC, "Tìm design", "✅ PASS", f"{len(studio_urls)} design", "≥ 1")
 
         # ── 2. Thử lần lượt đến design nào vào được /review VÀ click được AI ─
@@ -73,15 +74,23 @@ class TestDailyPrintTech(BaseDailyTest):
         done, elapsed = self.pt.wait_ai_done()
         tech = self.pt.get_suggested_tech()
         self._record_check(TC, "AI phân tích xong",
-                           "✅ PASS" if done else "⚠️ WARN",
-                           f"{tech} ({elapsed}s)" if done else f"timeout sau {elapsed}s")
+                           "✅ PASS" if done else "❌ FAIL",
+                           f"{tech} ({elapsed}s)" if done else f"timeout {elapsed}s — AI không trả kết quả")
 
         self._shot(TC, "2", "ai_result")
 
         # ── 4. Click ^ expand danh sách công nghệ ────────────────────────────
         expanded = self.pt.expand_tech_list(tech)
         self._record_check(TC, "Expand danh sách công nghệ",
-                           "✅ PASS" if expanded else "⚠️ WARN",
-                           "danh sách mở thành công" if expanded else "không click được expand")
+                           "✅ PASS" if expanded else "❌ FAIL",
+                           "danh sách mở thành công" if expanded else "không click được nút expand")
         if expanded:
             self._shot(TC, "3", "tech_expanded")
+
+        # ══ KẾT QUẢ ══════════════════════════════════════════════════════════
+        failed_checks = [r for r in self._results if "FAIL" in r.get("status", "")]
+        if failed_checks:
+            pytest.fail(
+                f"Print tech có {len(failed_checks)} check FAIL: "
+                + ", ".join(r["check"] for r in failed_checks)
+            )

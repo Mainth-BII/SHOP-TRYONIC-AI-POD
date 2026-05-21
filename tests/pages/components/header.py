@@ -19,10 +19,12 @@ class HeaderComponent:
 
     @property
     def profile_button(self) -> Locator:
+        # Profile button có class 'border border-gray-200/60 rounded-full'
+        # Nav buttons cũng có 'rounded-full' nhưng KHÔNG có 'border-gray-200'
         return self.page.locator(
             "header button:has-text('Tryonic'), "
             "header [class*='avatar'], "
-            "header button[class*='rounded-full']"
+            "header button[class*='border-gray-200']"
         ).first
 
     @property

@@ -108,10 +108,10 @@ class TestDailyArtwork(BaseDailyTest):
         ok, elapsed, total, new_count = self.studio.wait_for_new_artworks(
             baseline=baseline, min_new=1, timeout=120
         )
-        status_gen = "✅ PASS" if ok else "⚠️ WARN"
         self._record_check(TC, "AI tạo artwork mới",
-                           status_gen,
-                           f"{new_count} ảnh mới ({elapsed}s) — tổng: {total}")
+                           "✅ PASS" if ok else "❌ FAIL",
+                           f"{new_count} ảnh mới ({elapsed}s) — tổng: {total}"
+                           if ok else f"timeout {elapsed}s — AI không trả kết quả ảnh")
         self._shot(TC, "4", f"new_artworks_{new_count}imgs_{elapsed}s")
 
         if not ok or new_count == 0:
@@ -121,16 +121,17 @@ class TestDailyArtwork(BaseDailyTest):
         # click_artwork dùng left library panel → index 0 là ảnh mới nhất (skip 'Thêm ảnh')
         clicked = self.studio.click_artwork(index=0)
         self._record_check(TC, "Click artwork variant",
-                           "✅ PASS" if clicked else "⚠️ WARN",
-                           "đã click artwork mới" if clicked else "không click được")
+                           "✅ PASS" if clicked else "❌ FAIL",
+                           "đã click artwork mới" if clicked else "không click được artwork")
         self._shot(TC, "5", "after_click_artwork")
 
         if clicked:
             canvas_elapsed = self.studio.wait_for_canvas_artwork(timeout=30, poll_ms=500)
             canvas_ok = canvas_elapsed >= 0
             self._record_check(TC, "Artwork render trên canvas áo",
-                               "✅ PASS" if canvas_ok else "⚠️ WARN",
-                               f"hiện lên sau {canvas_elapsed}s" if canvas_ok else "timeout")
+                               "✅ PASS" if canvas_ok else "❌ FAIL",
+                               f"hiện lên sau {canvas_elapsed}s" if canvas_ok
+                               else "timeout — artwork không render được lên canvas")
             self._shot(TC, "6", "canvas_artwork_on_shirt")
 
         # ── 7. Đổi loại áo ──────────────────────────────────────────────────
@@ -166,3 +167,11 @@ class TestDailyArtwork(BaseDailyTest):
                            "✅ PASS" if ok9 else "⚠️ WARN",
                            f"hiện 'Mặt sau' sau {elapsed9}s" if ok9 else f"không thấy 'Mặt sau' ({label9})")
         self._shot(TC, "9b", f"mat_sau_{ok9}")
+
+        # ══ KẾT QUẢ ══════════════════════════════════════════════════════════
+        failed_checks = [r for r in self._results if "FAIL" in r.get("status", "")]
+        if failed_checks:
+            pytest.fail(
+                f"Artwork có {len(failed_checks)} check FAIL: "
+                + ", ".join(r["check"] for r in failed_checks)
+            )

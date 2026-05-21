@@ -22,24 +22,51 @@ class TestDailyFooter(BaseDailyTest):
 
     # ── Helper ───────────────────────────────────────────────────────────────
 
-    def _verify_page(self, expected_path: str, label: str, step: str) -> bool:
-        """Verify trang load đúng: URL khớp, có content, không 404."""
+    def _verify_page(self, expected_path: str, label: str, step: str,
+                     keywords=None) -> bool:
+        """Verify trang load đúng: URL khớp, không lỗi/404, có đủ nội dung và dữ liệu."""
         url_ok = expected_path in self.page.url
-        no_404 = not self.page.locator(
-            ":text('404'), :text('Not Found'), :text('Không tìm thấy')"
-        ).is_visible(timeout=2_000)
-        has_content = self.page.locator(
-            "h1, h2, main, article, [class*='content' i]"
-        ).first.is_visible(timeout=8_000)
-        ok = url_ok and no_404 and has_content
+
+        # Lấy toàn bộ body text 1 lần — dùng cho cả kiểm tra lỗi lẫn nội dung
+        try:
+            body_text = self.page.evaluate(
+                "() => (document.body.innerText || '').trim()"
+            )
+        except Exception:
+            body_text = ""
+        body_lower = body_text.lower()
+
+        # Detect error / 404 — bao gồm các cụm tiếng Việt thường gặp
+        ERROR_PHRASES = [
+            "trang không tồn tại",
+            "không tìm thấy trang",
+            "page not found",
+            "lỗi 404",
+            "oops! trang",
+        ]
+        is_error = any(p in body_lower for p in ERROR_PHRASES)
+
+        # Trang thực phải có đủ nội dung (tối thiểu 300 ký tự)
+        has_real_content = len(body_text) > 300
+
+        # Kiểm tra keywords đặc trưng của trang — đảm bảo dữ liệu hiển thị đúng
+        missing_kw = [kw for kw in (keywords or []) if kw.lower() not in body_lower]
+        keywords_ok = len(missing_kw) == 0
+
+        ok = url_ok and not is_error and has_real_content and keywords_ok
+
         if not url_ok:
             detail = f"URL sai — expected '{expected_path}', got: {self.page.url}"
-        elif not no_404:
-            detail = f"Trang hiển thị lỗi 404 — {self.page.url}"
-        elif not has_content:
-            detail = f"Không có nội dung (h1/main) — {self.page.url}"
+        elif is_error:
+            snippet = body_text[:150].replace("\n", " ")
+            detail = f"Trang hiển thị lỗi/404 — \"{snippet}…\""
+        elif not has_real_content:
+            detail = f"Nội dung quá ít ({len(body_text)} ký tự) — trang có thể chưa có dữ liệu"
+        elif not keywords_ok:
+            detail = f"Thiếu nội dung đặc trưng: không tìm thấy {missing_kw} — {self.page.url}"
         else:
-            detail = f"URL: {self.page.url}"
+            detail = f"✓ {len(body_text)} ký tự | {self.page.url}"
+
         self._record_check(TC, f"Verify: {label}",
                            "✅ PASS" if ok else "❌ FAIL", detail)
         self._shot(TC, step, f"page_{label[:20].lower().replace(' ', '_')}")
@@ -89,14 +116,15 @@ class TestDailyFooter(BaseDailyTest):
 
         # ══ PHẦN 2: CHÍNH SÁCH — 5 LINKS ════════════════════════════════════
 
+        # keywords: cụm từ phải xuất hiện trong nội dung trang — verify dữ liệu đúng chủ đề
         CHINH_SACH_LINKS = [
-            ("/pages/chinh-sach-thanh-toan", "Chính sách thanh toán"),
-            ("/pages/chinh-sach-van-chuyen", "Chính sách vận chuyển"),
-            ("/pages/chinh-sach-doi-tra",    "Chính sách đổi sản phẩm"),
-            ("/pages/chinh-sach-bao-mat",    "Bảo mật thông tin"),
-            ("/pages/dieu-khoan-su-dung",    "Điều khoản sử dụng"),
+            ("/pages/chinh-sach-thanh-toan", "Chính sách thanh toán",   ["thanh toán"]),
+            ("/pages/chinh-sach-van-chuyen", "Chính sách vận chuyển",   ["vận chuyển"]),
+            ("/pages/chinh-sach-doi-tra",    "Chính sách đổi sản phẩm", ["đổi"]),
+            ("/pages/chinh-sach-bao-mat",    "Bảo mật thông tin",       ["bảo mật"]),
+            ("/pages/dieu-khoan-su-dung",    "Điều khoản sử dụng",      ["điều khoản"]),
         ]
-        for i, (href, label) in enumerate(CHINH_SACH_LINKS, start=1):
+        for i, (href, label, kws) in enumerate(CHINH_SACH_LINKS, start=1):
             self._go_home_and_scroll_footer()
             footer = self.page.locator("footer").first
             link = footer.locator(f"a[href*='{href}']").first
@@ -111,18 +139,18 @@ class TestDailyFooter(BaseDailyTest):
                 link.click()
                 self.page.wait_for_load_state("domcontentloaded", timeout=15_000)
                 self.page.wait_for_timeout(1_000)
-                self._verify_page(href, label, f"4_{i}")
+                self._verify_page(href, label, f"4_{i}", keywords=kws)
             else:
                 self._record_check(TC, f"Verify: {label}", "⚠️ WARN", "skip — link không thấy")
 
         # ══ PHẦN 3: HƯỚNG DẪN — 3 LINKS ═════════════════════════════════════
 
         HUONG_DAN_LINKS = [
-            ("/pages/huong-dan-mua-hang", "Hướng dẫn mua hàng"),
-            ("/pages/huong-dan-bao-quan", "Hướng dẫn bảo quản"),
-            ("/pages/lien-he-cskh",       "Liên hệ CSKH"),
+            ("/pages/huong-dan-mua-hang", "Hướng dẫn mua hàng", ["mua hàng"]),
+            ("/pages/huong-dan-bao-quan", "Hướng dẫn bảo quản", ["bảo quản"]),
+            ("/pages/lien-he-cskh",       "Liên hệ CSKH",       ["liên hệ"]),
         ]
-        for i, (href, label) in enumerate(HUONG_DAN_LINKS, start=1):
+        for i, (href, label, kws) in enumerate(HUONG_DAN_LINKS, start=1):
             self._go_home_and_scroll_footer()
             footer = self.page.locator("footer").first
             link = footer.locator(f"a[href*='{href}']").first
@@ -137,7 +165,7 @@ class TestDailyFooter(BaseDailyTest):
                 link.click()
                 self.page.wait_for_load_state("domcontentloaded", timeout=15_000)
                 self.page.wait_for_timeout(1_000)
-                self._verify_page(href, label, f"6_{i}")
+                self._verify_page(href, label, f"6_{i}", keywords=kws)
             else:
                 self._record_check(TC, f"Verify: {label}", "⚠️ WARN", "skip — link không thấy")
 

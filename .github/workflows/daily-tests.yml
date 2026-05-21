@@ -59,6 +59,8 @@ jobs:
           PYTHONPATH: ${{ github.workspace }}/tests
           DAILY_TEST_EMAIL: ${{ secrets.DAILY_TEST_EMAIL }}
           DAILY_TEST_PASSWORD: ${{ secrets.DAILY_TEST_PASSWORD }}
+          GOOGLE_CHAT_WEBHOOK_URL: ${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}
+          IMGBB_API_KEY: ${{ secrets.IMGBB_API_KEY }}
         run: |
           python -m pytest tests/production/daily/ \
             --env=test \
@@ -155,20 +157,11 @@ jobs:
           retention-days: 14
 
       # ── Notify Google Chat ────────────────────────────────────────────────
-      - name: Notify Google Chat
-        if: always()
-        continue-on-error: true
-        env:
-          GOOGLE_CHAT_WEBHOOK_URL: ${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}
-          STATUS: ${{ steps.results.outputs.status }}
-          TOTAL: ${{ steps.results.outputs.total }}
-          PASSED: ${{ steps.results.outputs.passed }}
-          FAILED: ${{ steps.results.outputs.failed }}
-          SKIPPED: ${{ steps.results.outputs.skipped }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          RUN_NUMBER: ${{ github.run_number }}
-          BASE_URL: "https://test.shop.tryonic.ai"
-        run: python .github/scripts/notify_google_chat.py
+      # Rich notification (per-suite + AI timings + bugs + screenshots) đã được
+      # gửi bởi conftest.py trong bước Run daily smoke ở trên (có GOOGLE_CHAT_WEBHOOK_URL).
+      # Bước notify cũ đã tắt để tránh gửi 2 lần.
+      # - name: Notify Google Chat (legacy — disabled)
+      #   if: false
 
       # ── Fail job only if tests actually ran and failed ────────────────────
       - name: Fail job if tests failed

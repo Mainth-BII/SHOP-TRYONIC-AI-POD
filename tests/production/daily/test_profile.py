@@ -23,31 +23,39 @@ class TestDailyProfile(BaseDailyTest):
     # ── Helper ───────────────────────────────────────────────────────────────
 
     def _login(self) -> None:
+        """Login và verify thành công. Skip nếu thiếu credentials, fail nếu API lỗi."""
         email, pwd = self.env.login_email, self.env.login_password
         if not email or not pwd:
             pytest.skip("Thiếu credentials — set DAILY_TEST_EMAIL / DAILY_TEST_PASSWORD")
-        self.home.navigate()
-        self.home.header.click_login()
-        self.page.wait_for_timeout(1_000)
         from pages.auth_modal_page import AuthModalPage
-        AuthModalPage(self.page, self.env.fe_url).login(email, pwd)
-        self.page.wait_for_timeout(3_000)
+        for attempt in range(1, 3):          # thử tối đa 2 lần (API /auth/login đôi khi 500)
+            self.home.navigate()
+            self.home.header.click_login()
+            self.page.wait_for_timeout(1_000)
+            AuthModalPage(self.page, self.env.fe_url).login(email, pwd)
+            self.page.wait_for_timeout(3_000)
+            if self.home.header.is_logged_in():
+                print(f"  [INFO] Đăng nhập thành công (lần {attempt})")
+                return
+            print(f"  [WARN] Đăng nhập thất bại lần {attempt} — thử lại..." if attempt < 2
+                  else f"  [WARN] Đăng nhập thất bại cả 2 lần")
+            self.page.wait_for_timeout(2_000)
+        self._record_check(TC, "Login thành công", "❌ FAIL",
+                           "API /auth/login có thể đang lỗi (HTTP 500)")
+        pytest.fail("Đăng nhập thất bại sau 2 lần thử — kiểm tra API /auth/login")
 
     def _open_profile_dropdown(self) -> bool:
         """Click profile button → mở dropdown menu. Trả về True nếu thành công."""
-        clicked = self.page.evaluate("""() => {
-            const btns = Array.from(document.querySelectorAll('header button'));
-            const nav = ['Sản phẩm','Chính sách','Hướng dẫn','Đăng nhập','shopping_cart','Giỏ hàng'];
-            const profile = btns.find(b => {
-                const t = (b.innerText || '').trim();
-                return t.length > 0 && !nav.some(n => t.includes(n));
-            });
-            if (profile) { profile.click(); return profile.innerText.trim().substring(0,20); }
-            return null;
-        }""")
-        print(f"  [INFO] profile btn clicked: {clicked}")
-        self.page.wait_for_timeout(800)
-        return bool(clicked)
+        if not self.home.header.is_logged_in():
+            print("  [WARN] Chưa đăng nhập — profile button không có trong header")
+            return False
+        try:
+            self.home.header.open_profile_menu()
+            print("  [INFO] profile dropdown mở thành công")
+            return True
+        except Exception as e:
+            print(f"  [WARN] Không mở được profile dropdown: {e}")
+            return False
 
     def _verify_page(self, expected_path: str, label: str, step: str) -> bool:
         """Verify trang load đúng: URL khớp, có content, không 404."""
@@ -78,9 +86,8 @@ class TestDailyProfile(BaseDailyTest):
         """Login → kiểm tra profile menu: Thiết kế, Đơn hàng, Hồ sơ, Đăng xuất."""
 
         # ── 1. Login ──────────────────────────────────────────────────────────
-        self._login()
-        self._record_check(TC, "Login thành công",
-                           "✅ PASS", f"URL: {self.page.url}")
+        self._login()   # raises pytest.fail nếu API lỗi; raises pytest.skip nếu thiếu creds
+        self._record_check(TC, "Login thành công", "✅ PASS", f"URL: {self.page.url}")
         self._shot(TC, "1", "home_after_login")
 
         # ── 2. Profile dropdown hiển thị ──────────────────────────────────────

@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Studio Page Object — /studio canvas, AI generation, điểm thưởng."""
 
 from playwright.sync_api import Page, Locator
@@ -405,28 +406,83 @@ class StudioPage(BasePage):
             pass
         return False
 
-    def wait_for_canvas_artwork(self, timeout: int = 30, poll_ms: int = 500) -> float:
-        """Poll đến khi artwork hiện lên canvas áo (center x: 380–830px).
-        Trả về elapsed seconds, hoặc -1.0 nếu timeout."""
+    def get_canvas_screenshot(self) -> bytes:
+        """Chụp vùng canvas trung tâm (áo + artwork) để so sánh thay đổi."""
+        try:
+            return self.page.screenshot(
+                clip={"x": 290, "y": 60, "width": 560, "height": 720}
+            )
+        except Exception:
+            return b""
+
+    def wait_for_canvas_artwork(
+        self,
+        pre_shot: bytes = b"",
+        timeout: int = 30,
+        poll_ms: int = 500,
+    ) -> float:
+        """Detect artwork đã render lên canvas áo.
+
+        Studio dùng Fabric.js — artwork nằm trên <canvas>, KHÔNG phải <img>.
+        → Dùng screenshot diff thay vì DOM img detection.
+
+        pre_shot: bytes từ get_canvas_screenshot() chụp TRƯỚC khi AI generate.
+                  Nếu canvas đã thay đổi so với pre_shot → artwork đã render.
+        Trả về elapsed seconds, hoặc -1.0 nếu timeout.
+        """
         import time
-        start = time.time()
+        import hashlib
+        start    = time.time()
         deadline = start + timeout
+
+        pre_hash = hashlib.md5(pre_shot).hexdigest() if pre_shot else ""
+
         while time.time() < deadline:
+            # ── Method 1: screenshot diff (so sánh với baseline trước gen) ───
+            if pre_hash:
+                try:
+                    cur = self.page.screenshot(
+                        clip={"x": 290, "y": 60, "width": 560, "height": 720}
+                    )
+                    if hashlib.md5(cur).hexdigest() != pre_hash:
+                        return round(time.time() - start, 2)
+                except Exception:
+                    pass
+
+            # ── Method 2: CORS-taint detection (artwork từ CDN → canvas bị taint) ─
+            try:
+                tainted = self.page.evaluate("""() => {
+                    for (const c of document.querySelectorAll('canvas')) {
+                        const ctx = c.getContext('2d');
+                        if (!ctx) continue;
+                        try { ctx.getImageData(0, 0, 1, 1); }
+                        catch (e) { return true; }   // cross-origin → artwork present
+                    }
+                    return false;
+                }""")
+                if tainted:
+                    return round(time.time() - start, 2)
+            except Exception:
+                pass
+
+            # ── Method 3: img ở vùng canvas rộng hơn (fallback cho non-Fabric UI) ─
             try:
                 found = self.page.evaluate("""() => {
-                    const imgs = Array.from(document.querySelectorAll('img[src]')).filter(img => {
-                        const rect = img.getBoundingClientRect();
-                        return rect.left > 380 && rect.left < 830
-                               && rect.width > 50 && rect.height > 50
+                    return Array.from(document.querySelectorAll('img[src]')).some(img => {
+                        const r   = img.getBoundingClientRect();
+                        const cx  = r.left + r.width / 2;
+                        return cx > 310 && cx < 930
+                               && r.width > 60 && r.height > 60
                                && img.complete && img.naturalWidth > 0;
                     });
-                    return imgs.length > 0;
                 }""")
                 if found:
                     return round(time.time() - start, 2)
             except Exception:
                 pass
+
             self.page.wait_for_timeout(poll_ms)
+
         return -1.0
 
     def click_library_image(self, index: int = 0) -> bool:

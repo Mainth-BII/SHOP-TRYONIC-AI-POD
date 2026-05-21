@@ -90,6 +90,10 @@ class TestDailyArtwork(BaseDailyTest):
             self.studio.ready()
         self._shot(TC, "3", "studio_after_product_select")
 
+        # Capture canvas baseline NGAY SAU KHI studio load (chưa có artwork)
+        # → dùng để so sánh sau khi AI generate + click artwork
+        _canvas_pre_shot = self.studio.get_canvas_screenshot()
+
         # ── 4. Nhập prompt trong Studio (nếu chưa nhập ở home) ───────────────
         # Ghi số ảnh hiện có TRONG CHAT PANEL (bên phải) trước khi gen → đo ảnh MỚI
         baseline = self.studio._count_chat_artworks()
@@ -126,7 +130,9 @@ class TestDailyArtwork(BaseDailyTest):
         self._shot(TC, "5", "after_click_artwork")
 
         if clicked:
-            canvas_elapsed = self.studio.wait_for_canvas_artwork(timeout=30, poll_ms=500)
+            canvas_elapsed = self.studio.wait_for_canvas_artwork(
+                pre_shot=_canvas_pre_shot, timeout=30, poll_ms=500
+            )
             canvas_ok = canvas_elapsed >= 0
             self._record_check(TC, "Artwork render trên canvas áo",
                                "✅ PASS" if canvas_ok else "❌ FAIL",

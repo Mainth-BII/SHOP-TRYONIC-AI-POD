@@ -100,10 +100,10 @@ def _upload_to_imgbb(image_path: str, api_key: str, expiry_sec: int = 3600) -> s
 # key: chuỗi con (lowercase) trong r["check"]
 # value: nhãn hiển thị trong section "⚡ Thời gian AI"
 _AI_TIMING_CHECKS = {
-    "ai tạo artwork":       "Tạo Artwork",
-    "tryon nam hoàn tất":   "AI Tryon (Nam)",
-    "ai phân tích xong":    "Gợi ý công nghệ in",
-    "size phù hợp":         "AI Size Guide",
+    "ai tạo artwork":          "🎨 Tạo Artwork",
+    "tryon nam hoàn tất":      "👗 AI Tryon",
+    "ai gợi ý công nghệ in":   "🖨️ Công nghệ in",
+    "size phù hợp":            "📐 AI Size Guide",
 }
 
 
@@ -121,12 +121,13 @@ def _extract_time(actual: str) -> str:
 
 def _timing_extra(actual: str, label: str) -> str:
     """Thông tin bổ sung cho timing (số ảnh, tên công nghệ,...)."""
-    if label == "Tạo Artwork":
+    if label == "🎨 Tạo Artwork":
         m = re.search(r'(\d+)\s*ảnh mới', actual)
         return f" ({m.group(1)} ảnh)" if m else ""
-    if label == "Gợi ý công nghệ in":
-        m = re.match(r'([A-Z][A-Z0-9]{1,10})\s', actual)
-        return f" — {m.group(1)}" if m else ""
+    if label == "🖨️ Công nghệ in":
+        # actual format: "kết quả: DTG — 35.2s"
+        m = re.search(r'kết quả:\s*([A-Z][A-Z0-9]{0,10})', actual)
+        return f" ({m.group(1)})" if m else ""
     return ""
 
 

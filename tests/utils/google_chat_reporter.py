@@ -214,8 +214,7 @@ def _build_daily_card(
                     {
                         "horizontalSizeStyle": "FILL_AVAILABLE_SPACE",
                         "widgets": [
-                            {"decoratedText": {"topLabel": "Pass Rate",   "text": pass_rate}},
-                            {"decoratedText": {"topLabel": "⏱ Duration",  "text": dur_str}},
+                            {"decoratedText": {"topLabel": "Pass Rate", "text": pass_rate}},
                         ],
                     },
                 ]

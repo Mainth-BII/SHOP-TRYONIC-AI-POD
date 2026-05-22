@@ -311,7 +311,7 @@ class TryonReviewPage(BasePage):
             return False
 
     def _is_option_selected(self, btn) -> bool:
-        return btn.evaluate("""el => {
+        return btn.evaluate(r"""el => {
             // 1. Explicit ARIA / data attributes (React UI patterns)
             if (el.getAttribute('aria-pressed') === 'true') return true;
             if (el.getAttribute('aria-checked') === 'true') return true;

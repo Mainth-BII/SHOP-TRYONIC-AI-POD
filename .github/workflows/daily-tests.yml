@@ -24,9 +24,6 @@ jobs:
     name: Daily Smoke — TEST env
     runs-on: ubuntu-22.04
     timeout-minutes: 30
-    permissions:
-      contents: read
-      actions: write
 
     steps:
       # ── Checkout ─────────────────────────────────────────────────────────

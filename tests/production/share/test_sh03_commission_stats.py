@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 SH03 — Thống kê hoa hồng affiliate (TC4 + TC5 + TC6)
 

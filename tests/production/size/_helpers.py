@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Shared helpers cho AI size recommendation popup tests."""
 import json
 import os

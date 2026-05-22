@@ -6,12 +6,16 @@ from .base_page import BasePage
 MY_DESIGNS_PATH = "/my-designs"
 ALL_OPTIONS = ["Nam", "Nữ", "Bé trai", "Bé gái"]
 
+# Button text: "Thử lại" nếu đã có kết quả trước, "Thử đồ ngay" nếu chưa thử lần nào
+_TRYON_BTN_SELECTOR = "button:has-text('Thử lại'), button:has-text('Thử đồ ngay')"
+
 
 class TryonReviewPage(BasePage):
     """Covers: my-designs listing, studio review page, tryon option selection."""
 
     def __init__(self, page: Page, base_url: str = ""):
         super().__init__(page, base_url)
+        self.last_error: str = ""  # set bởi set_options_and_tryon / wait_tryon_done
 
     # ── Locators ──────────────────────────────────────────────────────────────
 
@@ -21,10 +25,95 @@ class TryonReviewPage(BasePage):
 
     @property
     def thu_lai_button(self) -> Locator:
-        return self.page.locator("button:has-text('Thử lại')").first
+        """Khớp cả 'Thử lại' (đã có kết quả) lẫn 'Thử đồ ngay' (chưa thử lần nào)."""
+        return self.page.locator(_TRYON_BTN_SELECTOR).first
 
     def option_button(self, opt: str) -> Locator:
         return self.page.locator(f"button:has-text('{opt}')").first
+
+    # ── Error detection helpers ───────────────────────────────────────────────
+
+    def get_ui_error_text(self) -> str:
+        """Quét trang tìm error messages / toasts đang hiển thị."""
+        found: list[str] = []
+
+        # 1. ARIA roles thường dùng cho toasts/alerts
+        for sel in ["[role='alert']", "[role='status']"]:
+            try:
+                for el in self.page.locator(sel).all()[:3]:
+                    if el.is_visible(timeout=200):
+                        t = (el.inner_text() or "").strip()
+                        if t and len(t) < 300 and t not in found:
+                            found.append(t)
+            except Exception:
+                pass
+
+        # 2. Class-name hints
+        for kw in ["toast", "notification", "snack", "alert__", "error-msg"]:
+            try:
+                for el in self.page.locator(f"[class*='{kw}']").all()[:2]:
+                    if el.is_visible(timeout=200):
+                        t = (el.inner_text() or "").strip()
+                        if t and len(t) < 300 and t not in found:
+                            found.append(t)
+            except Exception:
+                pass
+
+        # 3. Vietnamese / English error keywords
+        for phrase in ["Lỗi", "hết điểm", "không đủ điểm", "Thất bại",
+                       "thất bại", "Không thể", "Error", "Failed", "hết tiền"]:
+            try:
+                el = self.page.locator(f":text('{phrase}')").first
+                if el.is_visible(timeout=150):
+                    t = (el.inner_text() or "").strip()
+                    if t and len(t) < 300 and t not in found:
+                        found.append(t)
+            except Exception:
+                pass
+
+        return " | ".join(found) if found else ""
+
+    def get_points_balance(self) -> str:
+        """Đọc số điểm hiện tại hiển thị trong header, ví dụ: '26 Điểm'."""
+        try:
+            # Dùng regex trên toàn bộ text để bắt "26 Điểm" / "26 điểm"
+            result = self.page.evaluate(r"""() => {
+                const m = (document.body.innerText || '').match(/\d+\s*[Đđ]iểm/);
+                return m ? m[0] : '';
+            }""")
+            if result:
+                return result.strip()
+        except Exception:
+            pass
+        return ""
+
+    def start_network_capture(self) -> None:
+        """Bắt đầu ghi nhận HTTP 4xx/5xx responses từ API domain."""
+        self._api_errors: list[str] = []
+
+        def _handler(response) -> None:
+            try:
+                if response.status >= 400:
+                    url = response.url
+                    if "api." in url or "/api/" in url:
+                        self._api_errors.append(f"HTTP {response.status}: {url}")
+            except Exception:
+                pass
+
+        self._net_handler = _handler
+        self.page.on("response", _handler)
+
+    def stop_network_capture(self) -> list[str]:
+        """Dừng ghi nhận và trả về list lỗi API đã bắt được."""
+        if hasattr(self, "_net_handler"):
+            try:
+                self.page.remove_listener("response", self._net_handler)
+            except Exception:
+                pass
+            del self._net_handler
+        captured = list(getattr(self, "_api_errors", []))
+        self._api_errors = []
+        return captured
 
     # ── Actions ───────────────────────────────────────────────────────────────
 
@@ -122,8 +211,10 @@ class TryonReviewPage(BasePage):
         return True
 
     def set_options_and_tryon(self, desired: list[str]) -> bool:
-        """Chọn desired trước (enable nút) → bỏ unwanted → click Thử lại."""
-        # Bước 1: BẬT các option trong desired — làm nút Thử lại xuất hiện/enable
+        """Chọn desired trước (enable nút) → bỏ unwanted → click Thử lại / Thử đồ ngay."""
+        self.last_error = ""
+
+        # Bước 1: BẬT các option trong desired — làm nút xuất hiện/enable
         for opt in desired:
             try:
                 btn = self.option_button(opt)
@@ -150,32 +241,107 @@ class TryonReviewPage(BasePage):
             except Exception:
                 pass
 
-        # Bước 3: Chờ Thử lại visible + enabled → click
+        # Bước 2.5: Chờ UI ổn định sau khi click options
+        self.page.wait_for_timeout(500)
+
+        # Bước 3: Chờ nút Thử lại / Thử đồ ngay visible + enabled → click
         try:
-            self.thu_lai_button.scroll_into_view_if_needed()
-            self.thu_lai_button.wait_for(state="visible", timeout=15_000)
-            if self.thu_lai_button.is_disabled():
-                print("    [WARN] Thử lại vẫn disabled")
+            tryon_btn = self.thu_lai_button
+            tryon_btn.scroll_into_view_if_needed()
+            tryon_btn.wait_for(state="visible", timeout=15_000)
+
+            # Đọc text để biết đang ở trạng thái nào
+            btn_text = ""
+            try:
+                btn_text = (tryon_btn.inner_text() or "").strip()
+            except Exception:
+                pass
+
+            if tryon_btn.is_disabled():
+                points = self.get_points_balance()
+                ui_err = self.get_ui_error_text()
+
+                # Diagnostics: dump trạng thái thực của từng option button
+                opt_states: dict[str, str] = {}
+                for opt in ALL_OPTIONS:
+                    try:
+                        ob = self.option_button(opt)
+                        if ob.is_visible(timeout=300):
+                            raw = ob.evaluate("""el => {
+                                return JSON.stringify({
+                                    cls: el.className,
+                                    border: window.getComputedStyle(el).borderColor,
+                                    bg: window.getComputedStyle(el).backgroundColor,
+                                    aria: el.getAttribute('aria-pressed'),
+                                    hasSvg: el.querySelector('svg') !== null,
+                                    disabled: el.disabled,
+                                })
+                            }""")
+                            import json as _j
+                            d = _j.loads(raw)
+                            sel = self._is_option_selected(ob)
+                            opt_states[opt] = f"sel={sel} svg={d['hasSvg']} border={d['border']}"
+                    except Exception:
+                        opt_states[opt] = "?"
+                print(f"    [DEBUG] option states: {opt_states}")
+
+                self.last_error = f"Nút '{btn_text}' bị disabled"
+                if points:
+                    self.last_error += f" — còn {points}"
+                if ui_err:
+                    self.last_error += f" — UI: {ui_err}"
+                print(f"    [WARN] Thử lại vẫn disabled"
+                      + (f" — {points}" if points else ""))
                 return False
+
             self._tryon_start = time.time()
-            self.thu_lai_button.click()
+            tryon_btn.click()
             self.page.wait_for_timeout(1_500)
             return True
+
         except Exception as e:
+            points = self.get_points_balance()
+            ui_err = self.get_ui_error_text()
+            self.last_error = "Không tìm thấy nút Thử lại / Thử đồ ngay"
+            if points:
+                self.last_error += f" — còn {points}"
+            if ui_err:
+                self.last_error += f" — UI: {ui_err}"
             print(f"    [WARN] Không click Thử lại: {e}")
             return False
 
     def _is_option_selected(self, btn) -> bool:
         return btn.evaluate("""el => {
-            const hasSvg = el.querySelector('svg path[fill]') !== null;
-            const cls = (el.className || '');
+            // 1. Explicit ARIA / data attributes (React UI patterns)
+            if (el.getAttribute('aria-pressed') === 'true') return true;
+            if (el.getAttribute('aria-checked') === 'true') return true;
+            if (el.getAttribute('data-selected') === 'true') return true;
+            if (el.getAttribute('data-state') === 'on') return true;
+
+            // 2. Checkmark icon visible inside button
+            if (el.querySelector('svg') !== null) return true;
+            if (el.querySelector('[class*="check"]') !== null) return true;
+
+            // 3. Border/background is a specific non-gray accent color
+            // (loại bỏ check cls.includes('border-') vì Tailwind gắn class này cho hầu hết buttons)
             const border = window.getComputedStyle(el).borderColor || '';
-            return hasSvg || cls.includes('border-') || border.includes('88, 64') ||
-                   el.querySelector('[class*="check"]') !== null;
+            const bg     = window.getComputedStyle(el).backgroundColor || '';
+            const isNeutral = c => {
+                if (!c || c === '' || c.includes('0, 0, 0, 0')) return true;
+                const m = c.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+                if (!m) return true;
+                const [r, g, b] = [+m[1], +m[2], +m[3]];
+                // white (255,255,255) or gray (high value, similar channels)
+                return r > 200 && Math.abs(r - g) < 20 && Math.abs(g - b) < 20;
+            };
+            if (!isNeutral(border)) return true;  // colored border → selected
+            if (!isNeutral(bg) && bg !== 'rgb(255, 255, 255)') return true; // colored bg → selected
+            return false;
         }""")
 
     def wait_tryon_done(self, timeout: int = 90_000) -> tuple[bool, float]:
         """Chờ tryon render xong. Return (success, elapsed_seconds) tính từ lúc click Thử lại."""
+        self.last_error = ""
         start = getattr(self, "_tryon_start", time.time())
         try:
             self.page.wait_for_function("""() => {
@@ -204,11 +370,23 @@ class TryonReviewPage(BasePage):
             elapsed = round(time.time() - start, 1)
             print(f"    [TIME] Tryon hoàn tất trong {elapsed}s")
             return True, elapsed
+
         except Exception:
             self._scroll_largest_image_into_view()
             self.page.wait_for_timeout(3_000)
             elapsed = round(time.time() - start, 1)
-            print(f"    [TIME] Tryon timeout sau {elapsed}s")
+
+            # Thu thập thông tin lỗi để báo cáo
+            ui_err    = self.get_ui_error_text()
+            api_errs  = getattr(self, "_api_errors", [])  # từ network capture đang chạy
+            if ui_err:
+                self.last_error = f"UI error: {ui_err}"
+            elif api_errs:
+                self.last_error = "API: " + "; ".join(api_errs[:3])
+            else:
+                self.last_error = "Timeout — không có kết quả lẫn thông báo lỗi (silent failure)"
+
+            print(f"    [TIME] Tryon timeout sau {elapsed}s — {self.last_error}")
             return False, elapsed
 
     def _wait_image_rendered(self, timeout: int = 30_000) -> None:

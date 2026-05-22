@@ -86,18 +86,41 @@ class TestTryonFlow(BaseTryonTest):
 
                 self.page.goto(review_url)
                 self.page.wait_for_load_state("domcontentloaded")
-                self.page.wait_for_timeout(2_000)
+                # Chờ page ổn định (có thể đang auto-load kết quả cũ) trước khi thao tác
+                self.tryon._wait_image_rendered(timeout=15_000)
+                self.page.wait_for_timeout(1_000)
+
+                # Bắt đầu capture API errors trước khi thao tác
+                self.tryon.start_network_capture()
 
                 clicked = self.tryon.set_options_and_tryon(combo_opts)
+
                 if not clicked:
-                    self._record(design_label, combo_name, "❌ FAIL", "không click được Thử lại")
+                    api_errs = self.tryon.stop_network_capture()
+                    error_detail = self.tryon.last_error or "không click được nút Thử lại / Thử đồ ngay"
+                    if api_errs:
+                        error_detail += " | API: " + "; ".join(api_errs[:2])
+                    print(f"    [ISSUE] {design_label}/{combo_name}: {error_detail}")
+                    # Chụp screenshot trạng thái lỗi để debug
+                    self.tryon.shot(design_label, f"{combo_name}_fail", "disabled_state",
+                                   domain=_DOMAIN, root=_ROOT)
+                    self._record(design_label, combo_name, "❌ FAIL", error_detail)
                     continue
 
                 loaded, elapsed = self.tryon.wait_tryon_done()
-                status = "✅ PASS" if loaded else "⚠️ WARN"
-                note   = "" if loaded else "tryon timeout"
+                api_errs = self.tryon.stop_network_capture()
 
-                self.tryon.shot(design_label, combo_name, "result", domain=_DOMAIN, root=_ROOT)
-                self._record(design_label, combo_name, status, note, elapsed)
+                if loaded:
+                    self.tryon.shot(design_label, combo_name, "result", domain=_DOMAIN, root=_ROOT)
+                    self._record(design_label, combo_name, "✅ PASS", "", elapsed)
+                else:
+                    # Tryon không trả kết quả — luôn FAIL, không bao giờ WARN
+                    self.tryon.shot(design_label, f"{combo_name}_fail", "timeout_state",
+                                   domain=_DOMAIN, root=_ROOT)
+                    error_detail = self.tryon.last_error or "tryon timeout"
+                    if api_errs:
+                        error_detail += " | API: " + "; ".join(api_errs[:2])
+                    print(f"    [ISSUE] {design_label}/{combo_name}: {error_detail}")
+                    self._record(design_label, combo_name, "❌ FAIL", error_detail, elapsed)
 
         print(f"\n  [DONE] Screenshots: screenshots/{_ROOT}/{_DOMAIN}/")

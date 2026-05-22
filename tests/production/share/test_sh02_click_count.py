@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 SH02 — Đếm lượt click gian hàng (TC3)
 

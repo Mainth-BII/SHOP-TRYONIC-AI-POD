@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Base class cho full price flow tests.
 
 Chứa toàn bộ helpers dùng chung: assert giá, ghi kết quả, in báo cáo,

@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Base class cho daily smoke tests.
 
 Dừng ở màn hình checkout — không submit đơn, không tạo rác trên production.

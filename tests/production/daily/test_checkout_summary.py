@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Daily smoke — Checkout Summary (cart + coupon).
 
 Luồng: PT01 Trắng → Add to cart → Checkout → Apply GIAM20

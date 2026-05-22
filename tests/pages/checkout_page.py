@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Checkout / Order Modal Page Object."""
 
 from playwright.sync_api import Page, Locator

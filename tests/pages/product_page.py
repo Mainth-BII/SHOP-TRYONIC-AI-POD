@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Product Page Object — /product và /san-pham-ao (listing)."""
 
 from playwright.sync_api import Page, Locator

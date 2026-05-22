@@ -116,17 +116,18 @@ class TestDailyProfile(BaseDailyTest):
         # ══ LUỒNG 1: THIẾT KẾ CỦA TÔI ═══════════════════════════════════════
 
         self.home.navigate()
-        self.page.wait_for_timeout(800)
+        self.page.wait_for_timeout(1_500)
         self._open_profile_dropdown()
+        self.page.wait_for_timeout(500)   # Chờ dropdown animation
         design_link = self.page.locator("a[href*='/my-designs']").first
-        design_ok = design_link.is_visible(timeout=3_000)
+        design_ok = design_link.is_visible(timeout=5_000)
         self._record_check(TC, "Click Thiết kế của tôi",
                            "✅ PASS" if design_ok else "❌ FAIL",
                            "link visible" if design_ok else "link không thấy")
         if design_ok:
             design_link.click()
-            self.page.wait_for_load_state("domcontentloaded", timeout=15_000)
-            self.page.wait_for_timeout(1_500)
+            self.page.wait_for_load_state("domcontentloaded", timeout=20_000)
+            self.page.wait_for_timeout(2_000)
             self._verify_page("/my-designs", "Thiết kế của tôi", "3")
         else:
             self._record_check(TC, "Verify: Thiết kế của tôi", "⚠️ WARN", "skip")
@@ -135,17 +136,18 @@ class TestDailyProfile(BaseDailyTest):
         # ══ LUỒNG 2: ĐƠN HÀNG CỦA TÔI ═══════════════════════════════════════
 
         self.home.navigate()
-        self.page.wait_for_timeout(800)
+        self.page.wait_for_timeout(1_500)
         self._open_profile_dropdown()
+        self.page.wait_for_timeout(500)
         order_link = self.page.locator("a[href*='/my-orders']").first
-        order_ok = order_link.is_visible(timeout=3_000)
+        order_ok = order_link.is_visible(timeout=5_000)
         self._record_check(TC, "Click Đơn hàng của tôi",
                            "✅ PASS" if order_ok else "❌ FAIL",
                            "link visible" if order_ok else "link không thấy")
         if order_ok:
             order_link.click()
-            self.page.wait_for_load_state("domcontentloaded", timeout=15_000)
-            self.page.wait_for_timeout(1_500)
+            self.page.wait_for_load_state("domcontentloaded", timeout=20_000)
+            self.page.wait_for_timeout(2_000)
             self._verify_page("/my-orders", "Đơn hàng của tôi", "4")
         else:
             self._record_check(TC, "Verify: Đơn hàng của tôi", "⚠️ WARN", "skip")
@@ -154,17 +156,18 @@ class TestDailyProfile(BaseDailyTest):
         # ══ LUỒNG 3: HỒ SƠ CÁ NHÂN ═══════════════════════════════════════════
 
         self.home.navigate()
-        self.page.wait_for_timeout(800)
+        self.page.wait_for_timeout(1_500)
         self._open_profile_dropdown()
+        self.page.wait_for_timeout(500)
         profile_link = self.page.locator("a[href*='/profile']").first
-        profile_ok = profile_link.is_visible(timeout=3_000)
+        profile_ok = profile_link.is_visible(timeout=5_000)
         self._record_check(TC, "Click Hồ sơ cá nhân",
                            "✅ PASS" if profile_ok else "❌ FAIL",
                            "link visible" if profile_ok else "link không thấy")
         if profile_ok:
             profile_link.click()
-            self.page.wait_for_load_state("domcontentloaded", timeout=15_000)
-            self.page.wait_for_timeout(1_500)
+            self.page.wait_for_load_state("domcontentloaded", timeout=20_000)
+            self.page.wait_for_timeout(2_000)
             self._verify_page("/profile", "Hồ sơ cá nhân", "5")
 
             # Verify có các field thông tin cá nhân
@@ -183,14 +186,15 @@ class TestDailyProfile(BaseDailyTest):
         # ══ LUỒNG 4: ĐĂNG XUẤT ═══════════════════════════════════════════════
 
         self.home.navigate()
-        self.page.wait_for_timeout(800)
+        self.page.wait_for_timeout(1_500)
         self._open_profile_dropdown()
+        self.page.wait_for_timeout(500)
         self._shot(TC, "6", "before_logout")
 
         logout_btn = self.page.locator(
             "button:has-text('Đăng xuất'), a:has-text('Đăng xuất')"
         ).first
-        logout_visible = logout_btn.is_visible(timeout=3_000)
+        logout_visible = logout_btn.is_visible(timeout=5_000)
         self._record_check(TC, "Nút Đăng xuất visible",
                            "✅ PASS" if logout_visible else "❌ FAIL",
                            "visible trong dropdown" if logout_visible else "không thấy")

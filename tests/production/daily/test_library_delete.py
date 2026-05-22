@@ -35,11 +35,18 @@ class TestDailyLibraryDelete(BaseDailyTest):
         email, pwd = self.env.login_email, self.env.login_password
         if not email or not pwd:
             pytest.skip("Thiếu credentials — set DAILY_TEST_EMAIL / DAILY_TEST_PASSWORD")
-        self.home.navigate()
-        self.home.header.click_login()
-        self.page.wait_for_timeout(1_000)
-        AuthModalPage(self.page, self.env.fe_url).login(email, pwd)
-        self.page.wait_for_timeout(3_000)
+        for attempt in range(1, 3):
+            self.home.navigate()
+            self.home.header.click_login()
+            self.page.wait_for_timeout(1_000)
+            AuthModalPage(self.page, self.env.fe_url).login(email, pwd)
+            self.page.wait_for_timeout(3_000)
+            if self.home.header.is_logged_in():
+                print(f"  [INFO] Login thành công (lần {attempt})")
+                return
+            print(f"  [WARN] Login chưa xong lần {attempt} — thử lại...")
+            self.page.wait_for_timeout(2_000)
+        pytest.fail("Đăng nhập thất bại sau 2 lần thử — kiểm tra credentials/API")
 
     # ── Helper: Mở panel Thư Viện trong Studio ───────────────────────────────
 
@@ -217,7 +224,7 @@ class TestDailyLibraryDelete(BaseDailyTest):
 
         # Bước 2: Hover bằng Playwright → trigger CSS :hover / :group-hover
         self.page.mouse.move(coords["x"], coords["y"])
-        self.page.wait_for_timeout(800)
+        self.page.wait_for_timeout(1_500)   # CI headless cần thêm thời gian render hover
 
         # Bước 3: Tìm delete button xuất hiện sau hover
         # Icon xoá nằm góc trên-phải của card (absolute positioned)

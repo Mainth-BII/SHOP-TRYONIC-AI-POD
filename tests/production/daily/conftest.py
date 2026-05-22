@@ -47,10 +47,20 @@ def _save_daily_reports():
                 "screenshots", "daily",
             )
         )
+
+        # Build GitHub Actions run URL (nếu đang chạy trên CI)
+        _run_url = ""
+        _gh_server = _os.getenv("GITHUB_SERVER_URL", "https://github.com")
+        _gh_repo   = _os.getenv("GITHUB_REPOSITORY", "")
+        _gh_run_id = _os.getenv("GITHUB_RUN_ID", "")
+        if _gh_repo and _gh_run_id:
+            _run_url = f"{_gh_server}/{_gh_repo}/actions/runs/{_gh_run_id}"
+
         from utils.google_chat_reporter import send_daily_report
         send_daily_report(
             suites,
             total_duration=_duration,
+            artifact_url=_run_url,
             screenshots_base=_screenshots_base,
         )
     except Exception as exc:

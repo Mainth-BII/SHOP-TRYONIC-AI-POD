@@ -11,8 +11,10 @@ from datetime import datetime
 from typing import Optional
 
 
-WEBHOOK_URL   = os.getenv("GOOGLE_CHAT_WEBHOOK_URL", "")
-IMGBB_API_KEY = os.getenv("IMGBB_API_KEY", "")   # https://imgbb.com → free API key
+WEBHOOK_URL    = os.getenv("GOOGLE_CHAT_WEBHOOK_URL", "")
+IMGBB_API_KEY  = os.getenv("IMGBB_API_KEY", "")   # https://imgbb.com → free API key
+# Imgur anonymous upload — không cần key riêng, dùng làm fallback khi chưa có imgbb
+IMGUR_CLIENT_ID = os.getenv("IMGUR_CLIENT_ID", "546c25a59c58ad7")
 
 # ── Screenshot helpers ────────────────────────────────────────────────────────
 
@@ -49,6 +51,26 @@ def _find_failure_screenshot(suite_name: str, check_name: str, screenshots_base:
         )
     # Fallback: mới nhất
     return max(all_files, key=os.path.getmtime)
+
+
+def _upload_to_imgur(image_path: str, client_id: str = IMGUR_CLIENT_ID) -> str:
+    """Upload ảnh lên Imgur anonymously — không cần API key riêng.
+    Trả về public URL hoặc '' nếu lỗi."""
+    try:
+        with open(image_path, "rb") as f:
+            img_b64 = base64.b64encode(f.read())
+        resp = requests.post(
+            "https://api.imgur.com/3/image",
+            headers={"Authorization": f"Client-ID {client_id}"},
+            data={"image": img_b64},
+            timeout=30,
+        )
+        if resp.status_code == 200:
+            return resp.json()["data"]["link"]
+        print(f"[GoogleChat] Imgur upload HTTP {resp.status_code}: {resp.text[:120]}")
+    except Exception as exc:
+        print(f"[GoogleChat] Imgur upload error: {exc}")
+    return ""
 
 
 def _upload_to_imgbb(image_path: str, api_key: str, expiry_sec: int = 3600) -> str:
@@ -332,23 +354,25 @@ def send_daily_report(
     # ── Tìm và upload screenshot cho từng check FAIL ──────────────────────
     failure_screenshots: dict = {}
     failures = _collect_failures(suites)
-    if failures and screenshots_base and IMGBB_API_KEY:
-        print(f"[GoogleChat] Uploading {len(failures)} failure screenshot(s) to imgbb…")
+    if failures and screenshots_base:
+        use_imgbb  = bool(IMGBB_API_KEY)
+        use_imgur  = bool(IMGUR_CLIENT_ID)
+        host_label = "imgbb" if use_imgbb else ("Imgur" if use_imgur else "")
+        if host_label:
+            print(f"[GoogleChat] Uploading {len(failures)} failure screenshot(s) to {host_label}…")
         for f in failures:
-            key        = f"{f['suite']}|{f['check']}"
-            shot_path  = _find_failure_screenshot(
-                f["suite"], f["check"], screenshots_base
-            )
-            if shot_path:
-                print(f"  → [{f['suite']}] {os.path.basename(shot_path)}")
+            key       = f"{f['suite']}|{f['check']}"
+            shot_path = _find_failure_screenshot(f["suite"], f["check"], screenshots_base)
+            if not shot_path:
+                continue
+            print(f"  → [{f['suite']}] {os.path.basename(shot_path)}")
+            img_url = ""
+            if use_imgbb:
                 img_url = _upload_to_imgbb(shot_path, IMGBB_API_KEY)
-                if img_url:
-                    failure_screenshots[key] = img_url
-    elif failures and screenshots_base and not IMGBB_API_KEY:
-        print(
-            "[GoogleChat] IMGBB_API_KEY chưa set — không upload ảnh.\n"
-            "             Lấy free key tại https://imgbb.com/signup"
-        )
+            if not img_url and use_imgur:
+                img_url = _upload_to_imgur(shot_path, IMGUR_CLIENT_ID)
+            if img_url:
+                failure_screenshots[key] = img_url
 
     payload = _build_daily_card(
         suites, total_duration, artifact_url,

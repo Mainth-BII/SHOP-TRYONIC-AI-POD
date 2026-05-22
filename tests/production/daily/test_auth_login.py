@@ -22,6 +22,37 @@ class TestDailyAuthLogin(BaseDailyTest):
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 
+    def _read_points(self) -> int:
+        """Tìm và trả về số điểm hiển thị trên trang hiện tại.
+        Trả về số nguyên (>= 0) hoặc -1 nếu không đọc được."""
+        try:
+            points = self.page.evaluate(r"""() => {
+                const body = document.body.innerText || "";
+
+                // Pattern 1: "NNN điểm" (VD: "150 điểm", "1,500 điểm")
+                const m1 = body.match(/(\d[\d,.]*)\s*điểm/i);
+                if (m1) return parseInt(m1[1].replace(/[,.]/g, ""));
+
+                // Pattern 2: "điểm: NNN" hoặc "điểm\nNNN"
+                const m2 = body.match(/điểm[:\s]+(\d[\d,.]*)/i);
+                if (m2) return parseInt(m2[1].replace(/[,.]/g, ""));
+
+                // Pattern 3: elements có class liên quan đến điểm/credit/balance
+                const els = document.querySelectorAll(
+                    '[class*="point" i], [class*="credit" i], '
+                    + '[class*="balance" i], [class*="coin" i], [class*="diem" i]'
+                );
+                for (const el of els) {
+                    const m = (el.innerText || "").match(/(\d[\d,.]*)/);
+                    if (m) return parseInt(m[1].replace(/[,.]/g, ""));
+                }
+                return -1;
+            }""")
+            return int(points) if points is not None else -1
+        except Exception as e:
+            print(f"  [WARN] _read_points error: {e}")
+            return -1
+
     def _open_login_modal(self) -> bool:
         """Mở modal đăng nhập. Trả về True nếu thành công."""
         try:
@@ -91,6 +122,23 @@ class TestDailyAuthLogin(BaseDailyTest):
             "Profile button visible" if profile_ok else "Không thấy profile button",
         )
         self._shot(TC, "4", "header_after_login")
+
+        # ── 3b. Verify điểm tài khoản >= 50 ──────────────────────────────────
+        # Points được hiển thị trong Studio (tương tự TC_DAILY_037)
+        from pages.studio_page import StudioPage
+        studio = StudioPage(self.page, self.env.fe_url)
+        studio.navigate()
+        self.page.wait_for_timeout(2_000)
+        self._shot(TC, "4b", "studio_for_points_check")
+
+        points = self._read_points()
+        point_ok = points >= 50
+        self._record_check(
+            TC, "Tài khoản có >= 50 điểm (đủ để dùng AI)",
+            "✅ PASS" if point_ok else "❌ FAIL",
+            f"{points} điểm" if points >= 0 else "Không đọc được điểm trên trang",
+            ">= 50 điểm",
+        )
 
         # ── 4. Logout ─────────────────────────────────────────────────────────
         try:

@@ -22,7 +22,7 @@ on:
 jobs:
   test:
     name: Daily Smoke — TEST env
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 30
 
     steps:
@@ -174,7 +174,7 @@ jobs:
   # ── Tryon Job — chạy song song với smoke, timeout riêng 90 phút ────────────
   tryon-test:
     name: Daily Tryon — AI Thử đồ
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 90
 
     steps:
@@ -234,7 +234,7 @@ jobs:
   # ── Print Tech Job — chạy song song, timeout 60 phút ─────────────────────────
   print-tech-test:
     name: Daily Print Tech — AI Gợi ý Công nghệ in
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 60
 
     steps:

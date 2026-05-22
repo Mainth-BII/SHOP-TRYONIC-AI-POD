@@ -107,6 +107,23 @@ class AuthModalPage(BasePage):
             "button:has-text('Gửi'), button:has-text('Reset'), button[type='submit']"
         ).first
 
+    @property
+    def reset_success_message(self) -> Locator:
+        """Thông báo xác nhận email đặt lại mật khẩu đã được gửi."""
+        return self.page.locator(
+            ":text('đã gửi'), :text('Kiểm tra email'), :text('check your email'), "
+            ":text('gửi thành công'), :text('successfully'), :text('email của bạn'), "
+            ":text('hộp thư'), :text('inbox'), :text('liên kết'), :text('link')"
+        ).first
+
+    @property
+    def forgot_password_form_title(self) -> Locator:
+        """Tiêu đề của form quên mật khẩu."""
+        return self.page.locator(
+            ":text('Quên mật khẩu'), :text('Đặt lại mật khẩu'), "
+            ":text('Forgot password'), :text('Reset password')"
+        ).first
+
     # ── Actions ──────────────────────────────────────────────────────────────
 
     def fill_login(self, email: str, password: str) -> None:

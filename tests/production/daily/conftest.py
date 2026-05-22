@@ -20,12 +20,13 @@ def _save_daily_reports():
     from production.daily.test_profile         import TestDailyProfile
     from production.daily.test_library_delete  import TestDailyLibraryDelete
     from production.daily.test_auth_login      import TestDailyAuthLogin
+    from production.daily.test_forgot_password import TestDailyForgotPassword
 
     _ALL_CLASSES = (
         TestDailyPriceCheckout, TestDailySizeGuide, TestDailyCheckoutSummary,
         TestDailyTryon, TestDailyPrintTech, TestDailyArtwork,
         TestDailyHeader, TestDailyFooter, TestDailyProfile,
-        TestDailyLibraryDelete, TestDailyAuthLogin,
+        TestDailyLibraryDelete, TestDailyAuthLogin, TestDailyForgotPassword,
     )
 
     # ── Lưu markdown + CSV từng suite ────────────────────────────────────────

@@ -8,16 +8,17 @@ on:
   # ── Manual trigger ──────────────────────────────────────────────────────────
   workflow_dispatch:
 
-  # ── Run on push để verify ──────────────────────────────────────────────────
-  push:
-    branches: [main]
-    paths:
-      - "tests/production/daily/**"
-      - "tests/production/tryon/**"
-      - "tests/config/**"
-      - "tests/pages/**"
-      - "data/**"
-      - ".github/workflows/daily-tests.yml"
+  # ── Push trigger đã tắt — tốn ~90 min mỗi push (3 jobs × 30 min)
+  # Bật lại khi cần debug CI bằng cách uncomment khối dưới:
+  # push:
+  #   branches: [main]
+  #   paths:
+  #     - "tests/production/daily/**"
+  #     - "tests/production/tryon/**"
+  #     - "tests/config/**"
+  #     - "tests/pages/**"
+  #     - "data/**"
+  #     - ".github/workflows/daily-tests.yml"
 
 jobs:
   test:

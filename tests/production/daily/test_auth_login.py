@@ -140,7 +140,9 @@ class TestDailyAuthLogin(BaseDailyTest):
             ">= 50 điểm",
         )
 
-        # ── 4. Logout ─────────────────────────────────────────────────────────
+        # ── 4. Logout — navigate về home trước (Studio header có thể khác cấu trúc) ──
+        self.home.navigate()
+        self.page.wait_for_timeout(1_000)
         try:
             self.home.header.logout()
         except Exception as e:

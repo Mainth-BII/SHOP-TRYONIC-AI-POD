@@ -135,7 +135,7 @@ class TestDailyAuthLogin(BaseDailyTest):
         point_ok = points >= 50
         self._record_check(
             TC, "Tài khoản có >= 50 điểm (đủ để dùng AI)",
-            "✅ PASS" if point_ok else "❌ FAIL",
+            "✅ PASS" if point_ok else "⚠️ WARN",   # WARN: thiếu điểm không phải lỗi login
             f"{points} điểm" if points >= 0 else "Không đọc được điểm trên trang",
             ">= 50 điểm",
         )

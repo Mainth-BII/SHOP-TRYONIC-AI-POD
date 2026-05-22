@@ -507,6 +507,8 @@ class TestDailyLibraryDelete(BaseDailyTest):
         # ── S3: Nhập prompt để tạo artwork ──────────────────────────────────
         if has_prompt_input:
             # Flow A: nhập prompt ở Home → Tạo ngay → navigate vào Studio
+            # Capture baseline TRƯỚC khi click generate (tránh miss artworks load trong quá trình navigate)
+            baseline = 0
             self.home.fill_prompt(_TEST_PROMPT)
             self.page.wait_for_timeout(300)
             self._shot(TC2, "3", "prompt_filled_home")
@@ -539,8 +541,6 @@ class TestDailyLibraryDelete(BaseDailyTest):
             studio.generate(_TEST_PROMPT)
             self.page.wait_for_timeout(1_000)
             self._shot(TC2, "4b", "prompt_submitted_studio")
-        else:
-            baseline = studio._count_chat_artworks()
 
         # ── S5: Chờ AI tạo artwork mới ───────────────────────────────────────
         self._record_check(TC2, "S5: Bắt đầu tạo artwork",

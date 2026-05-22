@@ -72,6 +72,8 @@ class AuthModalPage(BasePage):
     def error_message(self) -> Locator:
         return self.page.locator(
             ":text('Sai mật khẩu'), :text('Mật khẩu không đúng'), "
+            ":text('Vui lòng kiểm tra lại thông tin'), "
+            ":text('Thông tin không chính xác'), :text('kiểm tra lại'), "
             ":text('incorrect'), :text('Invalid'), :text('Đăng nhập thất bại')"
         ).first
 

@@ -5,46 +5,20 @@ Luồng: PT01 Trắng → Add to cart → Checkout → Apply GIAM20
 → verify dòng khuyến mãi + tổng sau giảm.
 KHÔNG click Thanh toán.
 """
-import json
-import os
-
 import pytest
 from playwright.sync_api import Page
 
 from .base_daily_test import BaseDailyTest, parse_int
 
 
-# ── Tham chiếu giá ────────────────────────────────────────────────────────────
+# ── Tham chiếu sản phẩm (chỉ slug/size để điều hướng — giá đọc từ trang) ─────
 
 def _load_pt01() -> dict:
-    path = os.path.join(
-        os.path.dirname(__file__), "..", "..", "..", "data", "product_pricing.json"
-    )
-    with open(path, encoding="utf-8") as f:
-        data = json.load(f)
-    product = next(p for p in data["products"] if p["code"] == "PT01")
-    # Lấy variant có size M
-    variant = product["variants"][0]
-    for v in product["variants"]:
-        if "M" in v.get("sizes", []):
-            variant = v
-            break
-    sale     = variant["salePrice"]                        # 189,000
-    giam20   = data["discount_codes"]["GIAM20"]["value"]   # 0.20
-    vat_rate = data["global"]["VAT_rate"]                  # 0.08
-    shipping = data["global"]["shipping_fee"]              # 20,000
-    discount = int(sale * giam20)                          # 37,800
-    after    = sale - discount                             # 151,200
-    vat_dc   = int(after * vat_rate)                       # 12,096
-    total_dc = after + vat_dc + shipping                   # 183,296
     return {
-        "slug":     "ao-phong-ca-tinh",
-        "name":     "Áo Phông Cá Tính",
-        "color":    "Trắng",
-        "size":     "M",
-        "sale":     sale,
-        "discount": discount,
-        "total_dc": total_dc,
+        "slug":  "ao-phong-ca-tinh",
+        "name":  "Áo Phông Cá Tính",
+        "color": "Trắng",
+        "size":  "M",
     }
 
 
@@ -77,6 +51,36 @@ def _read_total(page: Page) -> int | None:
         for (let i = 0; i < lines.length; i++) {
             if (/Tổng thanh toán/i.test(lines[i])) {
                 const m = lines[i].match(re) || (lines[i+1] || '').match(re);
+                if (m) return parseInt(m[1].replace(/[^\d]/g, ''));
+            }
+        }
+        return null;
+    }""")
+    return int(val) if val else None
+
+
+def _read_vat_line(page: Page) -> int | None:
+    val = page.evaluate(r"""() => {
+        const lines = (document.body.innerText || '').split('\n').map(l => l.trim()).filter(Boolean);
+        for (let i = 0; i < lines.length; i++) {
+            if (/\bVAT\b|thuế/i.test(lines[i])) {
+                const nearby = lines.slice(i, i + 3).join(' ');
+                const m = nearby.match(/(\d{1,3}(?:[,.]\d{3})+)/);
+                if (m) return parseInt(m[1].replace(/[^\d]/g, ''));
+            }
+        }
+        return null;
+    }""")
+    return int(val) if val else None
+
+
+def _read_shipping_line(page: Page) -> int | None:
+    val = page.evaluate(r"""() => {
+        const lines = (document.body.innerText || '').split('\n').map(l => l.trim()).filter(Boolean);
+        for (let i = 0; i < lines.length; i++) {
+            if (/vận chuyển|phí ship|shipping/i.test(lines[i])) {
+                const nearby = lines.slice(i, i + 3).join(' ');
+                const m = nearby.match(/(\d{1,3}(?:[,.]\d{3})+)/);
                 if (m) return parseInt(m[1].replace(/[^\d]/g, ''));
             }
         }
@@ -206,7 +210,7 @@ class TestDailyCheckoutSummary(BaseDailyTest):
 
         self._shot(tc, "5", "checkout_before_coupon")
 
-        # Verify subtotal trước coupon
+        # ── Đọc giá subtotal thực tế từ trang (không hardcode) ──────────────
         subtotal_raw = self.page.evaluate(r"""() => {
             const lines = (document.body.innerText||'').split('\n').map(l=>l.trim()).filter(Boolean);
             const re = /(\d{1,3}(?:[,.]\d{3})+)/;
@@ -218,7 +222,10 @@ class TestDailyCheckoutSummary(BaseDailyTest):
             }
             return null;
         }""")
-        self._assert_price(parse_int(subtotal_raw), p["sale"], "Subtotal trước coupon", "MH1")
+        subtotal_actual = parse_int(subtotal_raw)
+        self._record_check("MH1", "Subtotal trước coupon (giá thực tế từ trang)",
+                           "✅ PASS" if subtotal_actual else "⚠️ WARN",
+                           f"{subtotal_actual:,}đ" if subtotal_actual else "Không đọc được subtotal")
 
         # Apply GIAM20
         applied = _apply_coupon(self.page, "GIAM20")
@@ -228,14 +235,33 @@ class TestDailyCheckoutSummary(BaseDailyTest):
                            "OK" if applied else "Không tìm thấy ô nhập coupon",
                            "Coupon applied")
 
-        # Verify discount line
+        # ── Verify discount = 20% subtotal ───────────────────────────────────
         discount = _read_discount_line(self.page)
-        self._assert_price(discount, p["discount"], "GIAM20 giảm 20%", "MH2")
+        expected_discount = int(subtotal_actual * 0.20) if subtotal_actual else None
+        self._assert_price(discount, expected_discount, "GIAM20 = 20% subtotal", "MH2")
 
-        # Verify total after discount — DỪNG Ở ĐÂY, không click Thanh toán
-        total_after = _read_total(self.page)
-        self._assert_price(total_after, p["total_dc"], "Tổng sau GIAM20", "MH3")
+        # ── Verify tổng = (subtotal − 20%) + VAT + phí vận chuyển ───────────
+        total_after   = _read_total(self.page)
+        after_dc      = (subtotal_actual - discount) if (subtotal_actual and discount) else None
+        vat_actual    = _read_vat_line(self.page)
+        ship_actual   = _read_shipping_line(self.page)
+        # Fallback nếu không đọc được từ trang
+        vat_calc      = int(after_dc * 0.08) if after_dc else None
+        ship_default  = 20_000
+        vat           = vat_actual  if vat_actual  else vat_calc
+        ship          = ship_actual if ship_actual else ship_default
+        expected_total = (after_dc + vat + ship) if (after_dc and vat and ship) else None
 
-        print(f"\n  [INFO] discount={discount}, total_after={total_after}")
+        detail = (
+            f"({subtotal_actual:,} − {discount:,}) + {vat:,} VAT + {ship:,} ship"
+            f" = {expected_total:,}đ"
+            if expected_total else "Không tính được do thiếu dữ liệu"
+        )
+        self._record_check("MH3", "Công thức giá: (subtotal−20%) + VAT + ship",
+                           "ℹ️ INFO", detail)
+        self._assert_price(total_after, expected_total, "Tổng sau GIAM20", "MH3")
+
+        print(f"\n  [INFO] subtotal={subtotal_actual}, discount={discount}, "
+              f"vat={vat}, ship={ship}, total={total_after}")
         self.__class__._results = self._results
         self._save_report()

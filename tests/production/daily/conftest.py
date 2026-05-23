@@ -2,6 +2,38 @@
 import time
 import pytest
 
+# ── Thứ tự ưu tiên chạy test ─────────────────────────────────────────────────
+# test_artwork phải chạy trước test_print_tech và test_tryon
+# để design vừa tạo có thể được dùng ngay bởi 2 test AI sau.
+_TEST_ORDER = [
+    "test_artwork_smoke",       # 1 — tạo artwork (AI generation)
+    "test_auth_smoke",          # 2
+    "test_checkout_with_coupon_giam20",  # 3
+    "test_footer_smoke",        # 4
+    "test_forgot_password_smoke",  # 5
+    "test_header_smoke",        # 6
+    "test_library_delete_image",   # 7
+    "test_library_delete_new_artwork",  # 8
+    "test_profile_smoke",       # 9
+    "test_ai_size_smoke",       # 10
+    "test_buynow_checkout_price",  # 11
+    "test_cart_checkout_price",    # 12
+    "test_print_tech_smoke",    # 13 — phải sau artwork
+    "test_tryon_smoke",         # 14 — phải sau artwork
+]
+
+
+def pytest_collection_modifyitems(items):
+    """Sắp xếp daily tests: artwork chạy trước print_tech và tryon."""
+    def _sort_key(item):
+        base = item.originalname.split("[")[0]  # bỏ phần [chromium-...]
+        try:
+            return _TEST_ORDER.index(base)
+        except ValueError:
+            return len(_TEST_ORDER)  # test không có trong list → chạy cuối
+
+    items.sort(key=_sort_key)
+
 
 @pytest.fixture(scope="session", autouse=True)
 def _save_daily_reports():

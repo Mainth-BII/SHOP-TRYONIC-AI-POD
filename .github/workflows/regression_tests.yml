@@ -235,6 +235,24 @@ jobs:
           FAILED_LIST=$(echo "$FAILED_TESTS" | tr '|' '\n' | grep -v '^$' | head -10)
           PASSED_LIST=$(echo "$PASSED_TESTS" | tr '|' '\n' | grep -v '^$' | head -10)
 
+          # ── AI Timing section (đọc từ reports/ai_timings.json) ──────────────
+          AI_TIMING_SECTION=""
+          if [ -f "reports/ai_timings.json" ]; then
+            AI_TIMING_SECTION=$(python3 - <<'PYEOF'
+import json, sys
+try:
+    d = json.load(open("reports/ai_timings.json", encoding="utf-8"))
+    lines = ["⏱ " + k + ": " + v for k, v in d.items()]
+    text = "\\n".join(lines)
+    section = {"header": "⚡ Thời gian AI", "collapsible": False,
+                "widgets": [{"textParagraph": {"text": text}}]}
+    print("," + json.dumps(section, ensure_ascii=False))
+except Exception:
+    print("")
+PYEOF
+)
+          fi
+
           # Build sections JSON
           DETAIL_SECTIONS=""
 
@@ -272,11 +290,12 @@ jobs:
                       {
                         "decoratedText": {
                           "topLabel": "Pass Rate",
-                          "text": "<b>${RATE}%</b>  ⏱️ Duration: <b>${DURATION}</b>"
+                          "text": "<b>${RATE}%</b>"
                         }
                       }
                     ]
                   }
+                  ${AI_TIMING_SECTION}
                   ${DETAIL_SECTIONS}
                   ,{
                     "header": "Details",

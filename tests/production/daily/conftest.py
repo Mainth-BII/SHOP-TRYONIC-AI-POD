@@ -58,12 +58,26 @@ def _save_daily_reports():
         if _gh_repo and _gh_run_id:
             _run_url = f"{_gh_server}/{_gh_repo}/actions/runs/{_gh_run_id}"
 
-        from utils.google_chat_reporter import send_daily_report
+        from utils.google_chat_reporter import send_daily_report, _extract_ai_timings
         send_daily_report(
             suites,
             total_duration=_duration,
             artifact_url=_run_url,
             screenshots_base=_screenshots_base,
         )
+
+        # Lưu AI timings ra file để regression_tests.yml đọc trong notification
+        try:
+            import json as _json
+            _ai_times = _extract_ai_timings(suites)
+            if _ai_times:
+                _timings_dir = _os.path.join(_os.getcwd(), "reports")
+                _os.makedirs(_timings_dir, exist_ok=True)
+                with open(_os.path.join(_timings_dir, "ai_timings.json"), "w", encoding="utf-8") as _f:
+                    _json.dump(_ai_times, _f, ensure_ascii=False, indent=2)
+                print(f"[AI Timings] {_ai_times}")
+        except Exception as _te:
+            print(f"[AI Timings] save error: {_te}")
+
     except Exception as exc:
         print(f"[GoogleChat] Lỗi khi gửi report: {exc}")

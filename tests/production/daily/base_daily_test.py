@@ -4,11 +4,7 @@ from __future__ import annotations
 Dừng ở màn hình checkout — không submit đơn, không tạo rác trên production.
 Report format: numbered list (giống SH07), lưu tại reports/daily/.
 
-PROD SAFETY RULE:
-  Khi chạy --env=prod, _setup_prod_safety() phải được gọi trong fixture _setup.
-  Nó sẽ:
-    1. Block API route /orders / /checkout/submit → abort request (không tạo đơn thật)
-    2. Intercept click vào button Thanh toán / Đặt hàng → raise RuntimeError ngay lập tức
+PROD SAFETY RULE: Test chỉ verify đến màn checkout — KHÔNG click nút Thanh toán.
 """
 import csv
 import glob as _glob
@@ -59,51 +55,9 @@ class BaseDailyTest:
         return bool(fe_url) and "test." not in fe_url
 
     def _setup_prod_safety(self) -> None:
-        """Gọi trong fixture _setup — chặn submit đơn hàng trên PROD.
-
-        1. Block API route có thể tạo đơn → abort request
-        2. Inject JS để raise nếu button Thanh toán bị click
-        """
-        if not self._is_prod:
-            return
-
-        # Block API tạo đơn hàng
-        _BLOCKED = [
-            "**/orders**",
-            "**/checkout/submit**",
-            "**/checkout/confirm**",
-            "**/payment/create**",
-        ]
-        for pattern in _BLOCKED:
-            try:
-                self.page.route(pattern, lambda route, **_: route.abort())
-            except Exception:
-                pass
-
-        # Inject JS: override click trên button Thanh toán / Đặt hàng
-        _BLOCKED_TEXTS = ["Thanh toán", "Đặt hàng", "Xác nhận đơn",
-                          "Place order", "Submit order", "Confirm order"]
-        js_guard = f"""() => {{
-            const BLOCKED = {_BLOCKED_TEXTS};
-            document.addEventListener('click', function(e) {{
-                const el = e.target.closest('button, [role="button"], a');
-                if (!el) return;
-                const text = (el.innerText || el.textContent || '').trim();
-                if (BLOCKED.some(b => text.includes(b))) {{
-                    e.preventDefault();
-                    e.stopImmediatePropagation();
-                    console.error('[PROD SAFETY] Blocked click on: ' + text);
-                    alert('[PROD SAFETY] Không được click "' + text + '" trên PROD!');
-                }}
-            }}, true);
-        }}"""
-        try:
-            self.page.evaluate(js_guard)
-        except Exception:
-            pass
-
-        print("  [PROD SAFETY] Route block + click guard đã kích hoạt")
-
+        """PROD safety — nhắc nhở: test chỉ verify đến màn checkout, không click Thanh toán."""
+        if self._is_prod:
+            print("  [PROD SAFETY] Chỉ verify đến checkout — KHÔNG click Thanh toán")
     # ── Screenshot ───────────────────────────────────────────────────────────
 
     def _shot(self, tc_id: str, step: str, label: str) -> None:

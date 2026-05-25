@@ -97,43 +97,53 @@ def _read_coupon_feedback(page: Page) -> tuple[bool, str]:
         is_error=True  → có thông báo lỗi (hết hạn, không hợp lệ, ...)
         is_error=False → thành công hoặc không có message
     """
+    _ERROR_KW = [
+        'hết hạn', 'het han', 'không hợp lệ', 'khong hop le',
+        'không tồn tại', 'không tìm thấy', 'không áp dụng',
+        'đã sử dụng', 'da su dung', 'không còn', 'hết lượt',
+        'không hiệu lực', 'vô hiệu', 'expired', 'invalid',
+        'not found', 'does not exist',
+    ]
+
     msg = page.evaluate(r"""() => {
-        // Tìm element chứa thông báo lỗi coupon
+        const errorKeywords = ['hết hạn', 'het han', 'không hợp lệ', 'khong hop le',
+            'không tồn tại', 'không tìm thấy', 'không áp dụng',
+            'đã sử dụng', 'da su dung', 'không còn', 'hết lượt',
+            'không hiệu lực', 'vô hiệu', 'expired', 'invalid',
+            'not found', 'does not exist'];
+
+        // 1. Tìm element chứa thông báo lỗi coupon — ưu tiên element nhỏ, cụ thể
         const selectors = [
-            '[class*="coupon"] [class*="error"]',
-            '[class*="coupon"] [class*="invalid"]',
-            '[class*="promo"]  [class*="error"]',
-            '[class*="promo"]  [class*="invalid"]',
-            '[class*="error-message"]',
-            '[class*="alert"]',
             '[role="alert"]',
+            '[class*="error"]', '[class*="invalid"]', '[class*="danger"]',
+            '[class*="warning"]', '[class*="toast"]', '[class*="snack"]',
+            '[class*="message"]', '[class*="feedback"]', '[class*="notice"]',
+            '[class*="coupon"] p', '[class*="coupon"] span',
+            '[class*="promo"] p',  '[class*="promo"] span',
+            '[class*="discount"] p', '[class*="discount"] span',
         ];
         for (const sel of selectors) {
-            const el = document.querySelector(sel);
-            if (el && el.offsetWidth > 0 && el.innerText.trim()) {
-                return el.innerText.trim();
+            for (const el of document.querySelectorAll(sel)) {
+                const t = (el.innerText || el.textContent || '').trim();
+                if (!t || t.length > 300 || el.offsetWidth === 0) continue;
+                const low = t.toLowerCase();
+                if (errorKeywords.some(k => low.includes(k))) return t;
             }
         }
-        // Fallback: quét innerText toàn trang tìm từ khoá lỗi coupon
+
+        // 2. Fallback: quét toàn bộ innerText trang theo từng dòng
         const body = document.body.innerText || '';
-        const lines = body.split('\n').map(l => l.trim()).filter(Boolean);
-        const errorKeywords = ['hết hạn', 'không hợp lệ', 'không tồn tại',
-                               'expired', 'invalid', 'không tìm thấy',
-                               'không áp dụng', 'đã sử dụng'];
+        const lines = body.split('\n').map(l => l.trim()).filter(l => l.length > 3 && l.length < 250);
         for (const line of lines) {
             const low = line.toLowerCase();
-            if (errorKeywords.some(k => low.includes(k)) && line.length < 200) {
-                return line;
-            }
+            if (errorKeywords.some(k => low.includes(k))) return line;
         }
         return '';
     }""")
+
     if msg:
         low = msg.lower()
-        error_kw = ['hết hạn', 'không hợp lệ', 'không tồn tại',
-                    'expired', 'invalid', 'không tìm thấy',
-                    'không áp dụng', 'đã sử dụng']
-        is_err = any(k in low for k in error_kw)
+        is_err = any(k in low for k in _ERROR_KW)
         return is_err, msg
     return False, ""
 
@@ -305,6 +315,24 @@ class TestDailyCheckoutSummary(BaseDailyTest):
         # ── Verify discount = 20% subtotal ───────────────────────────────────
         discount = _read_discount_line(self.page)
         expected_discount = int(subtotal_actual * 0.20) if subtotal_actual else None
+
+        # Safety net: nếu không có discount line dù apply "thành công"
+        # → có thể coupon bị từ chối nhưng message không được bắt ở bước trước
+        if discount is None:
+            self.page.wait_for_timeout(1_000)
+            is_coupon_error2, coupon_msg2 = _read_coupon_feedback(self.page)
+            if coupon_msg2:
+                self._record_check("MH2", "GIAM20 áp dụng (re-check)", "⚠️ WARN", coupon_msg2)
+                self._record_check("MH2b", "GIAM20 = 20% subtotal", "⚠️ WARN",
+                                   f"Không có discount line — {coupon_msg2}")
+                self._record_check("MH3", "Tổng sau GIAM20", "⚠️ WARN",
+                                   f"Bỏ qua — coupon lỗi: {coupon_msg2}")
+                print(f"\n  [WARN] Coupon GIAM20 lỗi (re-check): {coupon_msg2}")
+                self.__class__._results = self._results
+                self._save_report()
+                return
+            # Không có message → vẫn báo WARN discount N/A bình thường
+
         self._assert_price(discount, expected_discount, "GIAM20 = 20% subtotal", "MH2")
 
         # ── Verify tổng = (subtotal − 20%) + VAT + phí vận chuyển ───────────

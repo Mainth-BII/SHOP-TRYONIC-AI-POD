@@ -148,7 +148,7 @@ class TestDailyFooter(BaseDailyTest):
         # (href, label, keywords, required) — required=False → 404 chỉ là WARN, không FAIL
         HUONG_DAN_LINKS = [
             ("/pages/huong-dan-mua-hang", "Hướng dẫn mua hàng", ["mua hàng"], True),
-            ("/pages/huong-dan-bao-quan", "Hướng dẫn bảo quản", [],           False),  # chưa có trên TEST env
+            ("/pages/huong-dan-bao-quan", "Hướng dẫn bảo quản", [],           False),  # optional — có thể chưa có nội dung
             ("/pages/lien-he-cskh",       "Liên hệ CSKH",       ["liên hệ"], True),
         ]
         for i, (href, label, kws, required) in enumerate(HUONG_DAN_LINKS, start=1):
@@ -170,9 +170,10 @@ class TestDailyFooter(BaseDailyTest):
                     # Trang không bắt buộc → kiểm tra nhẹ, 404 chỉ là WARN
                     body = self.page.evaluate("() => (document.body.innerText || '').trim()")
                     is_404 = any(p in body.lower() for p in ["trang không tồn tại", "page not found", "lỗi 404"])
+                    _env_label = "TEST" if "test." in getattr(self.env, "fe_url", "") else "PROD"
                     self._record_check(TC, f"Verify: {label}",
                                        "⚠️ WARN" if is_404 else "✅ PASS",
-                                       "Trang chưa có nội dung trên TEST env" if is_404
+                                       f"Trang chưa có nội dung trên {_env_label} env" if is_404
                                        else f"✓ {self.page.url}")
                     self._shot(TC, f"6_{i}", f"page_{label[:20].lower().replace(' ', '_')}")
                 else:

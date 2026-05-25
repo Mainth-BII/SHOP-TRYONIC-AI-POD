@@ -297,11 +297,11 @@ class TestDailyCheckoutSummary(BaseDailyTest):
             self._record_check("MH2", "GIAM20 áp dụng", "⚠️ WARN",
                                "Không tìm thấy ô nhập coupon")
         elif is_coupon_error:
-            # Coupon lỗi (hết hạn / không hợp lệ ...) → báo WARN đúng message
+            # Coupon lỗi (hết hạn / không hợp lệ ...) → 1 WARN duy nhất + 2 INFO bỏ qua
             self._record_check("MH2", "GIAM20 áp dụng", "⚠️ WARN", coupon_msg)
-            self._record_check("MH2b", "GIAM20 = 20% subtotal", "⚠️ WARN",
+            self._record_check("MH2b", "GIAM20 = 20% subtotal", "ℹ️ INFO",
                                f"Bỏ qua — coupon lỗi: {coupon_msg}")
-            self._record_check("MH3", "Tổng sau GIAM20", "⚠️ WARN",
+            self._record_check("MH3", "Tổng sau GIAM20", "ℹ️ INFO",
                                f"Bỏ qua — coupon lỗi: {coupon_msg}")
             print(f"\n  [WARN] Coupon GIAM20 lỗi: {coupon_msg}")
             self.__class__._results = self._results
@@ -323,9 +323,9 @@ class TestDailyCheckoutSummary(BaseDailyTest):
             is_coupon_error2, coupon_msg2 = _read_coupon_feedback(self.page)
             if coupon_msg2:
                 self._record_check("MH2", "GIAM20 áp dụng (re-check)", "⚠️ WARN", coupon_msg2)
-                self._record_check("MH2b", "GIAM20 = 20% subtotal", "⚠️ WARN",
-                                   f"Không có discount line — {coupon_msg2}")
-                self._record_check("MH3", "Tổng sau GIAM20", "⚠️ WARN",
+                self._record_check("MH2b", "GIAM20 = 20% subtotal", "ℹ️ INFO",
+                                   f"Bỏ qua — coupon lỗi: {coupon_msg2}")
+                self._record_check("MH3", "Tổng sau GIAM20", "ℹ️ INFO",
                                    f"Bỏ qua — coupon lỗi: {coupon_msg2}")
                 print(f"\n  [WARN] Coupon GIAM20 lỗi (re-check): {coupon_msg2}")
                 self.__class__._results = self._results

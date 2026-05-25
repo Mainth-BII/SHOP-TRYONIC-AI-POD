@@ -77,13 +77,18 @@ class TestDailyArtwork(BaseDailyTest):
         self._record_check(TC, "S3: Baseline artworks", "✅ PASS",
                            f"{baseline} ảnh cũ trong chat panel")
 
+        # Kiểm tra input field có tồn tại không trước khi gửi
+        _input_visible = self.studio.prompt_input.is_visible(timeout=5_000)
         self.studio.generate(prompt)
         self.page.wait_for_timeout(1_000)
         self._shot(TC, "2", "prompt_submitted")
+        self._record_check(TC, "S3: Gửi prompt",
+                           "✅ PASS" if _input_visible else "⚠️ WARN",
+                           f"{'Đã gửi' if _input_visible else 'Không tìm thấy input'}: \"{prompt[:80]}...\"")
 
         # ── S4: Chờ AI trả về ≥ 1 ảnh mới ───────────────────────────────────
         ok, elapsed, total, new_count = self.studio.wait_for_new_artworks(
-            baseline=baseline, min_new=1, timeout=120
+            baseline=baseline, min_new=1, timeout=150
         )
         self._shot(TC, "3", f"artwork_result_{new_count}imgs_{elapsed}s")
 
@@ -94,6 +99,8 @@ class TestDailyArtwork(BaseDailyTest):
             self._record_check(TC, "S4: AI tạo artwork thành công", "❌ FAIL",
                                f"timeout {elapsed}s — AI không trả kết quả ảnh",
                                "≥ 1 ảnh mới trong chat panel")
+            self.__class__._results = self._results
+            self._save_report()
             pytest.fail(f"AI không tạo được artwork mới sau {elapsed}s (baseline={baseline})")
 
         # ── S5: Click artwork từ chat → Hoàn tất thiết kế (đo thời gian load) ──

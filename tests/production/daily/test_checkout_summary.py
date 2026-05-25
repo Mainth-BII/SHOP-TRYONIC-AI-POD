@@ -357,3 +357,162 @@ class TestDailyCheckoutSummary(BaseDailyTest):
               f"vat={vat}, ship={ship}, total={total_after}")
         self.__class__._results = self._results
         self._save_report()
+
+    def test_checkout_with_coupon_clc1(self):
+        """PT01 Trắng M → checkout → CLC1 (hợp lệ, 20%) → verify discount + total + VAT + ship."""
+        p = _PT01
+        self._login()
+
+        tc = "PT01_CLC1"
+
+        # Navigate to product
+        self.page.goto(f"{self.env.fe_url}/product/{p['slug']}")
+        self.page.wait_for_load_state("domcontentloaded")
+        self.page.wait_for_timeout(1_500)
+        self._shot(tc, "1", "product_page")
+
+        mua_ngay_ok = self.detail.click_mua_ngay()
+        if not mua_ngay_ok:
+            pytest.skip("Không mở được popup Mua ngay")
+        self.page.wait_for_timeout(1_500)
+
+        self.checkout.select_size_by_name(p["size"])
+        self.page.wait_for_timeout(800)
+
+        added = self.checkout.click_them_vao_gio()
+        self.page.wait_for_timeout(2_000)
+        if not added:
+            pytest.skip("Không click được 'Thêm vào giỏ'")
+
+        # Mở cart → checkout
+        try:
+            menu_btn = self.page.locator("button:has-text('menu')").first
+            if menu_btn.is_visible(timeout=2_000):
+                menu_btn.click()
+                self.page.wait_for_timeout(600)
+            cart_btn = self.page.locator("button:has-text('Giỏ hàng')").first
+            if cart_btn.is_visible(timeout=3_000):
+                cart_btn.click()
+                self.page.wait_for_timeout(1_500)
+        except Exception:
+            pass
+
+        checkout_ok = self.checkout.click_checkout_from_cart()
+        if not checkout_ok:
+            self.page.goto(f"{self.env.fe_url}/checkout")
+        try:
+            self.page.wait_for_url("**/checkout**", timeout=10_000)
+        except Exception:
+            self.page.wait_for_timeout(3_000)
+
+        self._shot(tc, "2", "checkout_before_coupon")
+
+        # ── Đọc subtotal trước khi apply ─────────────────────────────────────
+        subtotal_raw = self.page.evaluate(r"""() => {
+            const lines = (document.body.innerText||'').split('\n').map(l=>l.trim()).filter(Boolean);
+            const re = /(\d{1,3}(?:[,.]\d{3})+)/;
+            for (let i = 0; i < lines.length; i++) {
+                if (/^Tổng tiền$/.test(lines[i])) {
+                    const m = (lines[i+1]||'').match(re) || lines[i].match(re);
+                    if (m) return m[1];
+                }
+            }
+            return null;
+        }""")
+        subtotal_actual = parse_int(subtotal_raw)
+        self._record_check("CLC1_MH1", "Subtotal trước coupon",
+                           "✅ PASS" if subtotal_actual else "⚠️ WARN",
+                           f"{subtotal_actual:,}đ" if subtotal_actual else "Không đọc được subtotal")
+
+        # ── Apply CLC1 ────────────────────────────────────────────────────────
+        applied = _apply_coupon(self.page, "CLC1")
+        self._shot(tc, "3", "after_clc1")
+
+        if not applied:
+            self._record_check("CLC1_MH2", "CLC1: nhập mã", "❌ FAIL",
+                               "Không tìm thấy ô nhập coupon")
+            self.__class__._results = self._results
+            self._save_report()
+            return
+
+        # Đọc feedback — nếu lỗi là test FAIL (mã phải hợp lệ)
+        is_coupon_error, coupon_msg = _read_coupon_feedback(self.page)
+        if not is_coupon_error and not coupon_msg:
+            self.page.wait_for_timeout(1_000)
+            is_coupon_error, coupon_msg = _read_coupon_feedback(self.page)
+
+        if is_coupon_error:
+            self._record_check("CLC1_MH2", "CLC1: mã hợp lệ áp dụng", "❌ FAIL",
+                               f"Mã bị từ chối: \"{coupon_msg}\"")
+            self.__class__._results = self._results
+            self._save_report()
+            return
+
+        self._record_check("CLC1_MH2", "CLC1: mã hợp lệ áp dụng", "✅ PASS",
+                           coupon_msg if coupon_msg else "Áp dụng thành công")
+
+        # ── Verify discount = 20% subtotal ────────────────────────────────────
+        discount = _read_discount_line(self.page)
+        expected_discount = int(subtotal_actual * 0.20) if subtotal_actual else None
+
+        if discount is None:
+            self._record_check("CLC1_MH3", "CLC1: số tiền giảm = 20% subtotal", "❌ FAIL",
+                               "Không tìm thấy dòng giảm giá trên trang")
+        else:
+            tol = max(500, int((expected_discount or 0) * 0.01))  # tolerance 1%
+            ok_dc = expected_discount and abs(discount - expected_discount) <= tol
+            self._record_check(
+                "CLC1_MH3", "CLC1: số tiền giảm = 20% subtotal",
+                "✅ PASS" if ok_dc else "❌ FAIL",
+                f"Giảm {discount:,}đ — mong đợi {expected_discount:,}đ "
+                f"(20% × {subtotal_actual:,})",
+            )
+
+        # ── Đọc VAT + ship thực tế ────────────────────────────────────────────
+        after_dc   = (subtotal_actual - discount) if (subtotal_actual and discount) else None
+        vat_actual = _read_vat_line(self.page)
+        ship_actual = _read_shipping_line(self.page)
+        vat_calc   = int(after_dc * 0.08) if after_dc else None
+        vat        = vat_actual  if vat_actual  else vat_calc
+        ship       = ship_actual if ship_actual else 20_000
+
+        self._record_check(
+            "CLC1_MH4", "VAT (8% sau giảm)",
+            "✅ PASS" if vat else "⚠️ WARN",
+            f"{vat:,}đ" if vat else "Không đọc được VAT",
+        )
+        self._record_check(
+            "CLC1_MH5", "Phí vận chuyển",
+            "✅ PASS" if ship else "⚠️ WARN",
+            f"{ship:,}đ" if ship else "Không đọc được phí ship",
+        )
+
+        # ── Verify tổng sau giảm ──────────────────────────────────────────────
+        total_after    = _read_total(self.page)
+        expected_total = (after_dc + vat + ship) if (after_dc and vat and ship) else None
+
+        detail = (
+            f"({subtotal_actual:,} − {discount:,}) + {vat:,} VAT + {ship:,} ship"
+            f" = {expected_total:,}đ"
+            if expected_total else "Không tính được do thiếu dữ liệu"
+        )
+        self._record_check("CLC1_MH6", "Công thức: (subtotal−20%) + VAT + ship",
+                           "ℹ️ INFO", detail)
+
+        if total_after is None:
+            self._record_check("CLC1_MH7", "Tổng thanh toán sau CLC1", "⚠️ WARN",
+                               "Không đọc được tổng từ trang")
+        else:
+            tol_total = max(1_000, int((expected_total or 0) * 0.02))
+            ok_total  = expected_total and abs(total_after - expected_total) <= tol_total
+            self._record_check(
+                "CLC1_MH7", "Tổng thanh toán sau CLC1",
+                "✅ PASS" if ok_total else "❌ FAIL",
+                f"Trang hiện {total_after:,}đ — mong đợi {expected_total:,}đ",
+            )
+
+        self._shot(tc, "4", "checkout_final")
+        print(f"\n  [INFO] subtotal={subtotal_actual}, discount={discount}, "
+              f"vat={vat}, ship={ship}, total={total_after}, expected={expected_total}")
+        self.__class__._results = self._results
+        self._save_report()

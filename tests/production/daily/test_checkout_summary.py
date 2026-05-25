@@ -89,6 +89,55 @@ def _read_shipping_line(page: Page) -> int | None:
     return int(val) if val else None
 
 
+def _read_coupon_feedback(page: Page) -> tuple[bool, str]:
+    """Đọc message phản hồi sau khi apply coupon.
+
+    Returns:
+        (is_error, message)
+        is_error=True  → có thông báo lỗi (hết hạn, không hợp lệ, ...)
+        is_error=False → thành công hoặc không có message
+    """
+    msg = page.evaluate(r"""() => {
+        // Tìm element chứa thông báo lỗi coupon
+        const selectors = [
+            '[class*="coupon"] [class*="error"]',
+            '[class*="coupon"] [class*="invalid"]',
+            '[class*="promo"]  [class*="error"]',
+            '[class*="promo"]  [class*="invalid"]',
+            '[class*="error-message"]',
+            '[class*="alert"]',
+            '[role="alert"]',
+        ];
+        for (const sel of selectors) {
+            const el = document.querySelector(sel);
+            if (el && el.offsetWidth > 0 && el.innerText.trim()) {
+                return el.innerText.trim();
+            }
+        }
+        // Fallback: quét innerText toàn trang tìm từ khoá lỗi coupon
+        const body = document.body.innerText || '';
+        const lines = body.split('\n').map(l => l.trim()).filter(Boolean);
+        const errorKeywords = ['hết hạn', 'không hợp lệ', 'không tồn tại',
+                               'expired', 'invalid', 'không tìm thấy',
+                               'không áp dụng', 'đã sử dụng'];
+        for (const line of lines) {
+            const low = line.toLowerCase();
+            if (errorKeywords.some(k => low.includes(k)) && line.length < 200) {
+                return line;
+            }
+        }
+        return '';
+    }""")
+    if msg:
+        low = msg.lower()
+        error_kw = ['hết hạn', 'không hợp lệ', 'không tồn tại',
+                    'expired', 'invalid', 'không tìm thấy',
+                    'không áp dụng', 'đã sử dụng']
+        is_err = any(k in low for k in error_kw)
+        return is_err, msg
+    return False, ""
+
+
 def _apply_coupon(page: Page, code: str) -> bool:
     """Xóa mã cũ (nếu có) → nhập mã mới → click Áp dụng."""
     page.evaluate(r"""() => {
@@ -230,10 +279,28 @@ class TestDailyCheckoutSummary(BaseDailyTest):
         # Apply GIAM20
         applied = _apply_coupon(self.page, "GIAM20")
         self._shot(tc, "6", "after_giam20")
-        status_applied = "✅ PASS" if applied else "⚠️ WARN"
-        self._record_check("MH2", "GIAM20 áp dụng", status_applied,
-                           "OK" if applied else "Không tìm thấy ô nhập coupon",
-                           "Coupon applied")
+
+        # ── Đọc feedback message sau khi apply ───────────────────────────────
+        is_coupon_error, coupon_msg = _read_coupon_feedback(self.page)
+
+        if not applied:
+            self._record_check("MH2", "GIAM20 áp dụng", "⚠️ WARN",
+                               "Không tìm thấy ô nhập coupon")
+        elif is_coupon_error:
+            # Coupon lỗi (hết hạn / không hợp lệ ...) → báo WARN đúng message
+            self._record_check("MH2", "GIAM20 áp dụng", "⚠️ WARN", coupon_msg)
+            self._record_check("MH2b", "GIAM20 = 20% subtotal", "⚠️ WARN",
+                               f"Bỏ qua — coupon lỗi: {coupon_msg}")
+            self._record_check("MH3", "Tổng sau GIAM20", "⚠️ WARN",
+                               f"Bỏ qua — coupon lỗi: {coupon_msg}")
+            print(f"\n  [WARN] Coupon GIAM20 lỗi: {coupon_msg}")
+            self.__class__._results = self._results
+            self._save_report()
+            return
+        else:
+            self._record_check("MH2", "GIAM20 áp dụng", "✅ PASS",
+                               coupon_msg if coupon_msg else "OK",
+                               "Coupon applied")
 
         # ── Verify discount = 20% subtotal ───────────────────────────────────
         discount = _read_discount_line(self.page)

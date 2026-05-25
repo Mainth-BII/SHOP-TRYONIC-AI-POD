@@ -55,9 +55,39 @@ class BaseDailyTest:
         return bool(fe_url) and "test." not in fe_url
 
     def _setup_prod_safety(self) -> None:
-        """PROD safety — nhắc nhở: test chỉ verify đến màn checkout, không click Thanh toán."""
-        if self._is_prod:
-            print("  [PROD SAFETY] Chỉ verify đến checkout — KHÔNG click Thanh toán")
+        """PROD safety: nếu test vô tình click 'Thanh toán' trên PROD → fail ngay với message rõ ràng."""
+        if not self._is_prod:
+            return
+
+        import pytest as _pytest
+
+        def _on_payment_click():
+            _pytest.fail("🚫 Không được đặt đơn trên môi trường PROD")
+
+        # expose_function: cho phép JS gọi hàm Python
+        try:
+            self.page.expose_function("__prodSafetyViolation__", _on_payment_click)
+        except Exception:
+            pass  # đã expose ở lần trước (fixture chạy lại)
+
+        # add_init_script: chạy trên mọi trang, kể cả sau khi navigate
+        self.page.add_init_script("""() => {
+            const BLOCKED = ['Thanh toán', 'Đặt hàng', 'Xác nhận đơn',
+                             'Place order', 'Submit order'];
+            document.addEventListener('click', function(e) {
+                const el = e.target.closest('button, [role="button"], a[href]');
+                if (!el) return;
+                const text = (el.innerText || el.textContent || '').trim();
+                if (BLOCKED.some(b => text.includes(b))) {
+                    e.preventDefault();
+                    e.stopImmediatePropagation();
+                    if (window.__prodSafetyViolation__) {
+                        window.__prodSafetyViolation__();
+                    }
+                }
+            }, true);
+        }""")
+        print("  [PROD SAFETY] Click guard kích hoạt — sẽ fail nếu click Thanh toán")
     # ── Screenshot ───────────────────────────────────────────────────────────
 
     def _shot(self, tc_id: str, step: str, label: str) -> None:

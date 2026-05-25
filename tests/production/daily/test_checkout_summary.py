@@ -290,57 +290,54 @@ class TestDailyCheckoutSummary(BaseDailyTest):
         applied = _apply_coupon(self.page, "GIAM20")
         self._shot(tc, "6", "after_giam20")
 
-        # ── Đọc feedback message sau khi apply ───────────────────────────────
-        is_coupon_error, coupon_msg = _read_coupon_feedback(self.page)
-
         if not applied:
-            self._record_check("MH2", "GIAM20 áp dụng", "⚠️ WARN",
+            self._record_check("MH2", "GIAM20: nhập mã", "⚠️ WARN",
                                "Không tìm thấy ô nhập coupon")
-        elif is_coupon_error:
-            # Coupon lỗi (hết hạn / không hợp lệ ...) → 1 WARN duy nhất + 2 INFO bỏ qua
-            self._record_check("MH2", "GIAM20 áp dụng", "⚠️ WARN", coupon_msg)
-            self._record_check("MH2b", "GIAM20 = 20% subtotal", "ℹ️ INFO",
-                               f"Bỏ qua — coupon lỗi: {coupon_msg}")
-            self._record_check("MH3", "Tổng sau GIAM20", "ℹ️ INFO",
-                               f"Bỏ qua — coupon lỗi: {coupon_msg}")
-            print(f"\n  [WARN] Coupon GIAM20 lỗi: {coupon_msg}")
             self.__class__._results = self._results
             self._save_report()
             return
-        else:
-            self._record_check("MH2", "GIAM20 áp dụng", "✅ PASS",
-                               coupon_msg if coupon_msg else "OK",
-                               "Coupon applied")
 
-        # ── Verify discount = 20% subtotal ───────────────────────────────────
-        discount = _read_discount_line(self.page)
-        expected_discount = int(subtotal_actual * 0.20) if subtotal_actual else None
+        # ── Đọc feedback + discount line ─────────────────────────────────────
+        is_coupon_error, coupon_msg = _read_coupon_feedback(self.page)
 
-        # Safety net: nếu không có discount line dù apply "thành công"
-        # → có thể coupon bị từ chối nhưng message không được bắt ở bước trước
-        if discount is None:
+        # Re-check nếu chưa bắt được message ngay
+        if not is_coupon_error and not coupon_msg:
             self.page.wait_for_timeout(1_000)
-            is_coupon_error2, coupon_msg2 = _read_coupon_feedback(self.page)
-            if coupon_msg2:
-                self._record_check("MH2", "GIAM20 áp dụng (re-check)", "⚠️ WARN", coupon_msg2)
-                self._record_check("MH2b", "GIAM20 = 20% subtotal", "ℹ️ INFO",
-                                   f"Bỏ qua — coupon lỗi: {coupon_msg2}")
-                self._record_check("MH3", "Tổng sau GIAM20", "ℹ️ INFO",
-                                   f"Bỏ qua — coupon lỗi: {coupon_msg2}")
-                print(f"\n  [WARN] Coupon GIAM20 lỗi (re-check): {coupon_msg2}")
-                self.__class__._results = self._results
-                self._save_report()
-                return
-            # Không có message → vẫn báo WARN discount N/A bình thường
+            is_coupon_error, coupon_msg = _read_coupon_feedback(self.page)
 
-        self._assert_price(discount, expected_discount, "GIAM20 = 20% subtotal", "MH2")
+        discount = _read_discount_line(self.page)
 
-        # ── Verify tổng = (subtotal − 20%) + VAT + phí vận chuyển ───────────
+        # ── CASE A: Coupon hết hạn / không hợp lệ ────────────────────────────
+        # Hành vi đúng: hệ thống báo lỗi VÀ KHÔNG áp dụng giảm giá
+        if is_coupon_error or (coupon_msg and not discount):
+            no_discount_applied = (discount is None or discount == 0)
+            if no_discount_applied:
+                # ✅ Validate đúng: báo lỗi + không giảm tiền
+                self._record_check("MH2", "GIAM20: validate mã hết hạn",
+                                   "✅ PASS",
+                                   f"Hệ thống báo lỗi đúng: \"{coupon_msg}\" — không giảm tiền")
+            else:
+                # ❌ Bug: báo lỗi nhưng vẫn giảm tiền
+                self._record_check("MH2", "GIAM20: validate mã hết hạn",
+                                   "❌ FAIL",
+                                   f"Lỗi logic: báo \"{coupon_msg}\" nhưng vẫn giảm {discount:,}đ")
+            print(f"\n  [INFO] Coupon GIAM20 — {coupon_msg} (discount={discount})")
+            self.__class__._results = self._results
+            self._save_report()
+            return
+
+        # ── CASE B: Coupon hợp lệ → verify giá trị giảm ─────────────────────
+        self._record_check("MH2", "GIAM20: mã hợp lệ, áp dụng thành công",
+                           "✅ PASS", coupon_msg if coupon_msg else "Coupon applied")
+
+        expected_discount = int(subtotal_actual * 0.20) if subtotal_actual else None
+        self._assert_price(discount, expected_discount, "GIAM20 = 20% subtotal", "MH2b")
+
+        # Verify tổng = (subtotal − 20%) + VAT + phí vận chuyển
         total_after   = _read_total(self.page)
         after_dc      = (subtotal_actual - discount) if (subtotal_actual and discount) else None
         vat_actual    = _read_vat_line(self.page)
         ship_actual   = _read_shipping_line(self.page)
-        # Fallback nếu không đọc được từ trang
         vat_calc      = int(after_dc * 0.08) if after_dc else None
         ship_default  = 20_000
         vat           = vat_actual  if vat_actual  else vat_calc

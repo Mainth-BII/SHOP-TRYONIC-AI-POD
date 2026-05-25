@@ -3,7 +3,7 @@ name: Tryonic AI — Daily Automated Tests
 on:
   # ── 8:00 ICT (01:00 UTC) mỗi ngày ──────────────────────────────────────────
   schedule:
-    - cron: "3 1 * * *"    # 08:03 ICT hàng ngày
+    - cron: "0 1 * * *"    # 08:00 ICT hàng ngày
 
   # ── Manual trigger ──────────────────────────────────────────────────────────
   workflow_dispatch:

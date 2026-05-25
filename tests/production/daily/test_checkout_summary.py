@@ -204,6 +204,7 @@ class TestDailyCheckoutSummary(BaseDailyTest):
         self.env      = env
         self.page     = page
         self._results = []
+        self._setup_prod_safety()   # block Thanh toán / order API trên PROD
 
     def _login(self) -> None:
         email, pwd = self.env.login_email, self.env.login_password

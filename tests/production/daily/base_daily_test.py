@@ -3,6 +3,12 @@ from __future__ import annotations
 
 Dừng ở màn hình checkout — không submit đơn, không tạo rác trên production.
 Report format: numbered list (giống SH07), lưu tại reports/daily/.
+
+PROD SAFETY RULE:
+  Khi chạy --env=prod, _setup_prod_safety() phải được gọi trong fixture _setup.
+  Nó sẽ:
+    1. Block API route /orders / /checkout/submit → abort request (không tạo đơn thật)
+    2. Intercept click vào button Thanh toán / Đặt hàng → raise RuntimeError ngay lập tức
 """
 import csv
 import glob as _glob
@@ -43,6 +49,60 @@ class BaseDailyTest:
     _SUITE_NAME: str = "DAILY"
     _REPORT_TITLE: str = "Daily Smoke Test"
     _results: ClassVar[list] = []
+
+    # ── PROD Safety ──────────────────────────────────────────────────────────
+
+    @property
+    def _is_prod(self) -> bool:
+        """True nếu đang chạy trên môi trường PROD."""
+        fe_url = getattr(getattr(self, "env", None), "fe_url", "")
+        return bool(fe_url) and "test." not in fe_url
+
+    def _setup_prod_safety(self) -> None:
+        """Gọi trong fixture _setup — chặn submit đơn hàng trên PROD.
+
+        1. Block API route có thể tạo đơn → abort request
+        2. Inject JS để raise nếu button Thanh toán bị click
+        """
+        if not self._is_prod:
+            return
+
+        # Block API tạo đơn hàng
+        _BLOCKED = [
+            "**/orders**",
+            "**/checkout/submit**",
+            "**/checkout/confirm**",
+            "**/payment/create**",
+        ]
+        for pattern in _BLOCKED:
+            try:
+                self.page.route(pattern, lambda route, **_: route.abort())
+            except Exception:
+                pass
+
+        # Inject JS: override click trên button Thanh toán / Đặt hàng
+        _BLOCKED_TEXTS = ["Thanh toán", "Đặt hàng", "Xác nhận đơn",
+                          "Place order", "Submit order", "Confirm order"]
+        js_guard = f"""() => {{
+            const BLOCKED = {_BLOCKED_TEXTS};
+            document.addEventListener('click', function(e) {{
+                const el = e.target.closest('button, [role="button"], a');
+                if (!el) return;
+                const text = (el.innerText || el.textContent || '').trim();
+                if (BLOCKED.some(b => text.includes(b))) {{
+                    e.preventDefault();
+                    e.stopImmediatePropagation();
+                    console.error('[PROD SAFETY] Blocked click on: ' + text);
+                    alert('[PROD SAFETY] Không được click "' + text + '" trên PROD!');
+                }}
+            }}, true);
+        }}"""
+        try:
+            self.page.evaluate(js_guard)
+        except Exception:
+            pass
+
+        print("  [PROD SAFETY] Route block + click guard đã kích hoạt")
 
     # ── Screenshot ───────────────────────────────────────────────────────────
 
@@ -124,9 +184,16 @@ class BaseDailyTest:
         tong_str = (
             f"{total} kiểm tra  ✅ {passed}  ❌ {failed}  ⚠️ {warned}  ℹ️ {info_c}"
         )
+        import os as _os
+        _test_env = _os.getenv("TEST_ENV", "test").lower()
+        _env_label = (
+            "PROD — `shop.tryonic.ai`"
+            if _test_env == "prod"
+            else "TEST — `test.shop.tryonic.ai`"
+        )
         info_rows = [
             ("Ngày chạy",  ts_display),
-            ("Môi trường", "TEST — `test.shop.tryonic.ai`"),
+            ("Môi trường", _env_label),
             ("Kết quả",    verdict),
             ("Tổng",       tong_str),
         ]

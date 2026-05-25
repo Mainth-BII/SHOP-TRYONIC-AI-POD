@@ -259,40 +259,54 @@ def _build_daily_card(
             ],
         })
 
-    # ── Section 4: Bug detail + screenshot (chỉ khi có FAIL) ────────────────
-    failures  = _collect_failures(suites)
-    fshots    = failure_screenshots or {}
-    if failures:
-        bug_widgets = []
+    # ── Section 4: Issues (WARN + FAIL) ─────────────────────────────────────
+    issue_lines = []
+    for suite_name, data in suites.items():
+        for r in data["results"]:
+            st = r.get("status", "")
+            if "FAIL" in st or "WARN" in st:
+                icon        = "❌" if "FAIL" in st else "⚠️"
+                suite_label = _suite_display(suite_name)
+                check       = r.get("check", "")[:90]
+                actual      = (r.get("actual", "") or "N/A")[:200].replace("\n", " ")
+                expected    = r.get("expected", "")
+                line = f'{icon} <b>[{suite_label}]</b> {check}\n   → <i>{actual}</i>'
+                if expected:
+                    line += f'\n   ✦ mong đợi: {expected[:100]}'
+                issue_lines.append(line)
+
+    if issue_lines:
+        sections.append({
+            "header":     f"📋 Issues ({len(issue_lines)})",
+            "collapsible": True,
+            "widgets": [
+                {"textParagraph": {"text": "\n\n".join(issue_lines)}}
+            ],
+        })
+
+    # ── Section 4b: Screenshot cho FAIL ──────────────────────────────────────
+    failures = _collect_failures(suites)
+    fshots   = failure_screenshots or {}
+    if failures and fshots:
+        shot_widgets = []
         for f in failures:
-            suite_label = _suite_display(f["suite"])
-            check       = f["check"][:90]
-            actual      = f["actual"][:250].replace("\n", " ")
-            # Text mô tả bug
-            bug_widgets.append({
-                "textParagraph": {
-                    "text": (
-                        f'❌ <b>[{suite_label}]</b> {check}\n'
-                        f'   → <i>{actual}</i>'
-                    )
-                }
-            })
-            # Ảnh chụp màn hình (nếu đã upload thành công)
             img_url = fshots.get(f"{f['suite']}|{f['check']}", "")
             if img_url:
-                bug_widgets.append({
+                suite_label = _suite_display(f["suite"])
+                check       = f["check"][:60]
+                shot_widgets.append({
                     "image": {
                         "imageUrl": img_url,
-                        "altText":  f"Screenshot: {check[:60]}",
+                        "altText":  f"Screenshot: {check}",
                         "onClick":  {"openLink": {"url": img_url}},
                     }
                 })
-
-        sections.append({
-            "header":     f"🐛 Bug cần xử lý ({len(failures)})",
-            "collapsible": False,
-            "widgets":     bug_widgets,
-        })
+        if shot_widgets:
+            sections.append({
+                "header":     "📸 Screenshots (FAIL)",
+                "collapsible": True,
+                "widgets":     shot_widgets,
+            })
 
     # ── Section 5: Footer ─────────────────────────────────────────────────────
     footer_text = (

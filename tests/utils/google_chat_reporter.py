@@ -308,17 +308,33 @@ def _build_daily_card(
                 "widgets":     shot_widgets,
             })
 
-    # ── Section 5: Footer ─────────────────────────────────────────────────────
+    # ── Section 5: Footer + Report link ──────────────────────────────────────
     footer_text = (
         f"*Run:* {now}  |  *Env:* TEST — test.shop.tryonic.ai  "
         f"|  *Tester:* Playwright CI"
     )
-    if artifact_url:
-        footer_text += f"\n📎 <{artifact_url}|Xem full report & screenshots>"
+    footer_widgets: list = [{"textParagraph": {"text": footer_text}}]
 
-    sections.append({
-        "widgets": [{"textParagraph": {"text": footer_text}}]
-    })
+    if artifact_url:
+        # Artifacts tab trực tiếp: GitHub thêm #artifacts vào cuối run URL
+        artifacts_url = artifact_url.rstrip("/") + "#artifacts"
+        footer_widgets.append({
+            "buttonList": {
+                "buttons": [
+                    {
+                        "text": "📊 Xem Report & Screenshots",
+                        "onClick": {"openLink": {"url": artifacts_url}},
+                        "color": {"red": 0.11, "green": 0.47, "blue": 0.78, "alpha": 1},
+                    },
+                    {
+                        "text": "🔗 CI Run",
+                        "onClick": {"openLink": {"url": artifact_url}},
+                    },
+                ]
+            }
+        })
+
+    sections.append({"widgets": footer_widgets})
 
     return {
         "cardsV2": [{

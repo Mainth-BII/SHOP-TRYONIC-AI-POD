@@ -1,11 +1,12 @@
-"""Daily smoke: AI Tạo Artwork — Studio → prompt → AI gen ≥ 1 ảnh mới.
+"""Daily smoke: AI Tạo Artwork — Studio → prompt → AI gen ≥ 1 ảnh mới → Hoàn tất thiết kế.
 
 1 case duy nhất, tiết kiệm chi phí:
-  Login → Studio → chọn sản phẩm → nhập prompt → chờ AI gen → verify ảnh xuất hiện.
+  Login → Studio → chọn sản phẩm → nhập prompt → chờ AI gen → click artwork → Hoàn tất.
 Không test đổi màu / đổi áo / xoay — những tính năng đó có test case riêng.
 """
 import json
 import os
+import time as _time
 from datetime import date
 from typing import ClassVar
 
@@ -94,3 +95,62 @@ class TestDailyArtwork(BaseDailyTest):
                                f"timeout {elapsed}s — AI không trả kết quả ảnh",
                                "≥ 1 ảnh mới trong chat panel")
             pytest.fail(f"AI không tạo được artwork mới sau {elapsed}s (baseline={baseline})")
+
+        # ── S5: Click artwork từ chat → Hoàn tất thiết kế (đo thời gian load) ──
+        # Click ảnh mới nhất trong chat panel (bên phải ≥ 65% viewport) để đặt lên canvas
+        _clicked = self.page.evaluate("""() => {
+            const vw = window.innerWidth;
+            const threshold = vw * 0.65;
+            const imgs = Array.from(document.querySelectorAll('img[src]')).filter(img => {
+                const r = img.getBoundingClientRect();
+                return r.x > threshold && r.width >= 80 && r.height >= 80
+                    && img.complete && img.naturalWidth > 0;
+            });
+            if (!imgs.length) return 0;
+            imgs[imgs.length - 1].click();
+            return imgs.length;
+        }""")
+        print(f"  [INFO] S5: click chat artwork ({_clicked} ảnh trong panel)")
+        self.page.wait_for_timeout(2_500)
+        self._shot(TC, "4", "artwork_on_canvas")
+
+        # Click Hoàn tất thiết kế — bắt đầu đo thời gian TỪ LÚC CLICK
+        _t5 = _time.time()
+        try:
+            _fb = self.studio.finish_button
+            if _fb.is_visible(timeout=5_000):
+                _fb.click(force=True)
+            else:
+                raise Exception("button not visible")
+        except Exception:
+            self.page.evaluate("""() => {
+                const b = Array.from(document.querySelectorAll('button')).find(
+                    b => b.innerText && b.innerText.includes('Hoàn tất'));
+                if (b) b.click();
+            }""")
+
+        # Chờ navigate tới /review hoặc rời khỏi /studio
+        _nav_ok = False
+        try:
+            self.page.wait_for_url("**/review**", timeout=30_000)
+            _nav_ok = True
+        except Exception:
+            try:
+                self.page.wait_for_load_state("domcontentloaded", timeout=15_000)
+                _nav_ok = ("review" in self.page.url
+                           or "/studio" not in self.page.url)
+            except Exception:
+                _nav_ok = False
+
+        _e5 = round(_time.time() - _t5, 1)
+        self._shot(TC, "5", f"after_finish_{_e5}s")
+
+        _st5 = "✅ PASS" if _nav_ok else "⚠️ WARN"
+        self._record_check(
+            TC,
+            "S5: Hoàn tất thiết kế → trang load",
+            _st5,
+            f"{_e5}s — {'trang load thành công' if _nav_ok else 'chưa xác nhận navigate'}",
+        )
+        self.__class__._results = self._results
+        self._save_report()

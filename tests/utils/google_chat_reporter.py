@@ -101,6 +101,7 @@ def _upload_to_imgbb(image_path: str, api_key: str, expiry_sec: int = 3600) -> s
 # value: nhãn hiển thị trong section "⚡ Thời gian AI"
 _AI_TIMING_CHECKS = {
     "ai tạo artwork":          "🎨 Tạo Artwork",
+    "hoàn tất thiết kế":       "✅ Hoàn Tất TK",
     "tryon nam hoàn tất":      "👗 AI Tryon",
     "ai gợi ý công nghệ in":   "🖨️ Công nghệ in",
     "size phù hợp":            "📐 AI Size Guide",

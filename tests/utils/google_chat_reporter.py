@@ -16,6 +16,14 @@ IMGBB_API_KEY  = os.getenv("IMGBB_API_KEY", "")   # https://imgbb.com → free A
 # Imgur anonymous upload — không cần key riêng, dùng làm fallback khi chưa có imgbb
 IMGUR_CLIENT_ID = os.getenv("IMGUR_CLIENT_ID", "546c25a59c58ad7")
 
+# ── Environment label (set TEST_ENV=prod trong CI để hiện đúng env) ──────────
+_TEST_ENV = os.getenv("TEST_ENV", "test").lower()
+_ENV_LABEL = (
+    "PROD — shop.tryonic.ai"
+    if _TEST_ENV == "prod"
+    else "TEST — test.shop.tryonic.ai"
+)
+
 # ── Screenshot helpers ────────────────────────────────────────────────────────
 
 def _find_failure_screenshot(suite_name: str, check_name: str, screenshots_base: str) -> str:
@@ -310,7 +318,7 @@ def _build_daily_card(
 
     # ── Section 5: Footer + Report link ──────────────────────────────────────
     footer_text = (
-        f"*Run:* {now}  |  *Env:* TEST — test.shop.tryonic.ai  "
+        f"*Run:* {now}  |  *Env:* {_ENV_LABEL}  "
         f"|  *Tester:* Playwright CI"
     )
     footer_widgets: list = [{"textParagraph": {"text": footer_text}}]
@@ -342,7 +350,7 @@ def _build_daily_card(
             "card": {
                 "header": {
                     "title":    f"🤖 Tryonic Daily Smoke — {header_icon}",
-                    "subtitle": f"test.shop.tryonic.ai  |  {now}",
+                    "subtitle": f"{_ENV_LABEL}  |  {now}",
                     "imageUrl": "https://tryonic.ai/favicon.ico",
                     "imageType": "CIRCLE",
                 },

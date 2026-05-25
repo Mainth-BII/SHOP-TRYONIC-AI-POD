@@ -22,7 +22,7 @@ on:
 
 jobs:
   test:
-    name: Daily Smoke — TEST env
+    name: Daily Smoke — PROD env
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -54,13 +54,14 @@ jobs:
         env:
           CI: "true"
           PYTHONPATH: ${{ github.workspace }}/tests
-          DAILY_TEST_EMAIL: ${{ secrets.DAILY_TEST_EMAIL }}
-          DAILY_TEST_PASSWORD: ${{ secrets.DAILY_TEST_PASSWORD }}
+          PROD_EMAIL: ${{ secrets.PROD_EMAIL }}
+          PROD_PASSWORD: ${{ secrets.PROD_PASSWORD }}
           GOOGLE_CHAT_WEBHOOK_URL: ${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}
           IMGBB_API_KEY: ${{ secrets.IMGBB_API_KEY }}
+          TEST_ENV: "prod"
         run: |
           python -m pytest tests/production/daily/ \
-            --env=test \
+            --env=prod \
             --browser chromium \
             -v \
             --tb=short \
@@ -205,11 +206,12 @@ jobs:
         env:
           CI: "true"
           PYTHONPATH: ${{ github.workspace }}/tests
-          DAILY_TEST_EMAIL: ${{ secrets.DAILY_TEST_EMAIL }}
-          DAILY_TEST_PASSWORD: ${{ secrets.DAILY_TEST_PASSWORD }}
+          PROD_EMAIL: ${{ secrets.PROD_EMAIL }}
+          PROD_PASSWORD: ${{ secrets.PROD_PASSWORD }}
+          TEST_ENV: "prod"
         run: |
           python -m pytest tests/production/tryon/ \
-            --env=test \
+            --env=prod \
             --browser chromium \
             -v \
             --tb=short \
@@ -264,11 +266,12 @@ jobs:
         env:
           CI: "true"
           PYTHONPATH: ${{ github.workspace }}/tests
-          DAILY_TEST_EMAIL: ${{ secrets.DAILY_TEST_EMAIL }}
-          DAILY_TEST_PASSWORD: ${{ secrets.DAILY_TEST_PASSWORD }}
+          PROD_EMAIL: ${{ secrets.PROD_EMAIL }}
+          PROD_PASSWORD: ${{ secrets.PROD_PASSWORD }}
+          TEST_ENV: "prod"
         run: |
           python -m pytest tests/production/print_tech/ \
-            --env=test \
+            --env=prod \
             --browser chromium \
             -v \
             --tb=short \

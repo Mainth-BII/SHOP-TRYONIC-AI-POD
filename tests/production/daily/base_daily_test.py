@@ -55,22 +55,45 @@ class BaseDailyTest:
         return bool(fe_url) and "test." not in fe_url
 
     def _setup_prod_safety(self) -> None:
-        """PROD safety: nếu test vô tình click 'Thanh toán' trên PROD → fail ngay với message rõ ràng."""
+        """PROD safety: chặn tạo đơn hàng trên PROD bằng 2 lớp.
+
+        Lớp 1 — Block API: abort mọi request tạo đơn → đơn không bao giờ được tạo
+        Lớp 2 — Click guard: nếu click Thanh toán → pytest.fail ngay với message rõ ràng
+        """
         if not self._is_prod:
             return
 
+        # ── Lớp 1: Block API tạo đơn (abort request) ─────────────────────────
+        _ORDER_PATTERNS = [
+            "**/orders**",
+            "**/checkout/submit**",
+            "**/checkout/confirm**",
+            "**/payment**",
+            "**/place-order**",
+        ]
+        for pattern in _ORDER_PATTERNS:
+            try:
+                self.page.route(
+                    pattern,
+                    lambda route, **_: route.fulfill(
+                        status=403,
+                        body='{"error":"PROD_SAFETY: Không được đặt đơn trên môi trường PROD"}',
+                    )
+                )
+            except Exception:
+                pass
+
+        # ── Lớp 2: Click guard → pytest.fail ngay ────────────────────────────
         import pytest as _pytest
 
         def _on_payment_click():
             _pytest.fail("🚫 Không được đặt đơn trên môi trường PROD")
 
-        # expose_function: cho phép JS gọi hàm Python
         try:
             self.page.expose_function("__prodSafetyViolation__", _on_payment_click)
         except Exception:
-            pass  # đã expose ở lần trước (fixture chạy lại)
+            pass  # đã expose ở lần trước
 
-        # add_init_script: chạy trên mọi trang, kể cả sau khi navigate
         self.page.add_init_script("""() => {
             const BLOCKED = ['Thanh toán', 'Đặt hàng', 'Xác nhận đơn',
                              'Place order', 'Submit order'];
@@ -87,7 +110,7 @@ class BaseDailyTest:
                 }
             }, true);
         }""")
-        print("  [PROD SAFETY] Click guard kích hoạt — sẽ fail nếu click Thanh toán")
+        print("  [PROD SAFETY] Đã kích hoạt: block API order + click guard Thanh toán")
     # ── Screenshot ───────────────────────────────────────────────────────────
 
     def _shot(self, tc_id: str, step: str, label: str) -> None:

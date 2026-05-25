@@ -77,11 +77,32 @@ class TestDailyArtwork(BaseDailyTest):
         self._record_check(TC, "S3: Baseline artworks", "✅ PASS",
                            f"{baseline} ảnh cũ trong chat panel")
 
-        # Kiểm tra input field có tồn tại không trước khi gửi
-        _input_visible = self.studio.prompt_input.is_visible(timeout=5_000)
-        self.studio.generate(prompt)
-        self.page.wait_for_timeout(1_000)
-        self._shot(TC, "2", "prompt_submitted")
+        # ── Fill prompt → chụp ảnh → submit ────────────────────────────────
+        _inp = self.studio.prompt_input
+        _input_visible = _inp.is_visible(timeout=5_000)
+
+        if _input_visible:
+            _inp.fill(prompt)
+            self.page.wait_for_timeout(500)
+            self._shot(TC, "2a", "prompt_filled")        # chụp lúc đang điền
+
+            # Submit: thử click nút Tạo trước, fallback Enter
+            try:
+                _btn = self.studio.generate_button
+                if _btn.is_visible(timeout=3_000):
+                    _btn.click()
+                else:
+                    raise Exception("not visible")
+            except Exception:
+                _inp.press("Enter")
+
+            self.page.wait_for_timeout(1_000)
+            self._shot(TC, "2b", "prompt_submitted")     # chụp sau khi submit
+        else:
+            self.studio.generate(prompt)                 # fallback gọi như cũ
+            self.page.wait_for_timeout(1_000)
+            self._shot(TC, "2b", "prompt_submitted")
+
         self._record_check(TC, "S3: Gửi prompt",
                            "✅ PASS" if _input_visible else "⚠️ WARN",
                            f"{'Đã gửi' if _input_visible else 'Không tìm thấy input'}: \"{prompt[:80]}...\"")

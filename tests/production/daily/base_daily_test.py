@@ -75,7 +75,7 @@ class BaseDailyTest:
             try:
                 self.page.route(
                     pattern,
-                    lambda route, **_: route.fulfill(
+                    lambda route, *_args: route.fulfill(
                         status=403,
                         body='{"error":"PROD_SAFETY: Không được đặt đơn trên môi trường PROD"}',
                     )

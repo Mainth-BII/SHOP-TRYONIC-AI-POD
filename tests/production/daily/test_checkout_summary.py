@@ -503,9 +503,12 @@ class TestDailyCheckoutSummary(BaseDailyTest):
         if total_after is None:
             self._record_check("CLC1_MH7", "Tổng thanh toán sau CLC1", "⚠️ WARN",
                                "Không đọc được tổng từ trang")
+        elif expected_total is None:
+            self._record_check("CLC1_MH7", "Tổng thanh toán sau CLC1", "⚠️ WARN",
+                               f"Trang hiện {total_after:,}đ — không tính được expected_total (thiếu VAT/ship/discount)")
         else:
-            tol_total = max(1_000, int((expected_total or 0) * 0.02))
-            ok_total  = expected_total and abs(total_after - expected_total) <= tol_total
+            tol_total = max(1_000, int(expected_total * 0.02))
+            ok_total  = abs(total_after - expected_total) <= tol_total
             self._record_check(
                 "CLC1_MH7", "Tổng thanh toán sau CLC1",
                 "✅ PASS" if ok_total else "❌ FAIL",

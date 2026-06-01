@@ -97,14 +97,14 @@ class TestDailyProfile(BaseDailyTest):
                            "dropdown mở" if dropdown_opened else "không click được profile btn")
         if not dropdown_opened:
             pytest.fail("Không mở được profile dropdown")
-        self._shot(TC, "2", "profile_dropdown_open")
 
-        # Verify các menu items visible trong dropdown
+        # Verify các menu items visible trong dropdown — CHECK TRƯỚC khi screenshot
+        # (full_page screenshot scroll trang → trigger onMouseLeave → đóng dropdown)
         MENU_ITEMS = [
             ("Thiết kế của tôi", "a[href*='/my-designs']"),
             ("Đơn hàng của tôi",  "a[href*='/my-orders']"),
             ("Hồ sơ cá nhân",    "a[href*='/profile']"),
-            ("Đăng xuất",        "button:has-text('Đăng xuất'), a:has-text('Đăng xuất')"),
+            ("Đăng xuất",        "button:has-text('Đăng xuất'):visible, a:has-text('Đăng xuất'):visible"),
         ]
         for label, selector in MENU_ITEMS:
             el = self.page.locator(selector).first
@@ -112,6 +112,9 @@ class TestDailyProfile(BaseDailyTest):
             self._record_check(TC, f"Menu item visible: {label}",
                                "✅ PASS" if ok else "❌ FAIL",
                                "visible" if ok else "không thấy trong dropdown")
+
+        # Screenshot AFTER checks (dropdown có thể đã đóng — chỉ để visual record)
+        self._shot(TC, "2", "profile_dropdown_open")
 
         # ══ LUỒNG 1: THIẾT KẾ CỦA TÔI ═══════════════════════════════════════
 

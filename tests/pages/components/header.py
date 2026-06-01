@@ -19,18 +19,17 @@ class HeaderComponent:
 
     @property
     def profile_button(self) -> Locator:
-        # Profile button có class 'border border-gray-200/60 rounded-full'
-        # Nav buttons cũng có 'rounded-full' nhưng KHÔNG có 'border-gray-200'
+        # Profile button dùng 'py-1.5' (cart button dùng 'h-9 w-9', không có py-1.5)
+        # → selector này chỉ khớp đúng avatar profile button
         return self.page.locator(
-            "header button:has-text('Tryonic'), "
-            "header [class*='avatar'], "
-            "header button[class*='border-gray-200']"
+            "header button[class*='py-1.5']"
         ).first
 
     @property
     def logout_button(self) -> Locator:
+        # Chỉ lấy element đang visible (UserMenuPanel đang mở)
         return self.page.locator(
-            "button:has-text('Đăng xuất'), a:has-text('Đăng xuất')"
+            "button:has-text('Đăng xuất'):visible, a:has-text('Đăng xuất'):visible"
         ).first
 
     @property
@@ -69,12 +68,19 @@ class HeaderComponent:
 
     def open_profile_menu(self) -> None:
         self.profile_button.click()
-        self.page.wait_for_timeout(800)
+        self.page.wait_for_timeout(1_000)  # chờ dropdown animation xong
 
     def logout(self) -> None:
         self.open_profile_menu()
-        self.logout_button.click()
-        self.page.wait_for_timeout(2000)
+        # Thử click logout scoped trong UserMenuPanel trước
+        try:
+            btn = self.page.locator(
+                "button:has-text('Đăng xuất'):visible"
+            ).first
+            btn.click(timeout=5_000)
+        except Exception:
+            self.logout_button.click()
+        self.page.wait_for_timeout(2_000)
 
     def navigate_ao_tron(self) -> bool:
         """Hover 'Sản phẩm áo' trong header → click 'Áo trơn' trong dropdown.

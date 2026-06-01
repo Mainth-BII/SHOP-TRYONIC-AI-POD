@@ -115,69 +115,95 @@ class TestDailyFooter(BaseDailyTest):
         self._shot(TC, "2", "footer_company_info")
 
         # ══ PHẦN 2: CHÍNH SÁCH — 5 LINKS ════════════════════════════════════
+        # Hỗ trợ cả old URLs (/pages/...) và new short URLs (deployed TEST env)
 
-        # keywords: cụm từ phải xuất hiện trong nội dung trang — verify dữ liệu đúng chủ đề
         CHINH_SACH_LINKS = [
-            ("/pages/chinh-sach-thanh-toan", "Chính sách thanh toán",   ["thanh toán"]),
-            ("/pages/chinh-sach-van-chuyen", "Chính sách vận chuyển",   ["vận chuyển"]),
-            ("/pages/chinh-sach-doi-tra",    "Chính sách đổi sản phẩm", ["đổi"]),
-            ("/pages/chinh-sach-bao-mat",    "Bảo mật thông tin",       ["bảo mật"]),
-            ("/pages/dieu-khoan-su-dung",    "Điều khoản sử dụng",      ["điều khoản"]),
+            ("/pages/chinh-sach-thanh-toan", "/payment-policy",  "Chính sách thanh toán",   ["thanh toán"]),
+            ("/pages/chinh-sach-van-chuyen", "/shipping-policy", "Chính sách vận chuyển",   ["vận chuyển"]),
+            ("/pages/chinh-sach-doi-tra",    "/return-policy",   "Chính sách đổi sản phẩm", ["đổi"]),
+            ("/pages/chinh-sach-bao-mat",    "/privacy-policy",  "Bảo mật thông tin",       ["bảo mật"]),
+            ("/pages/dieu-khoan-su-dung",    "/terms",           "Điều khoản sử dụng",      ["điều khoản"]),
         ]
-        for i, (href, label, kws) in enumerate(CHINH_SACH_LINKS, start=1):
+        for i, (old_href, new_href, label, kws) in enumerate(CHINH_SACH_LINKS, start=1):
             self._go_home_and_scroll_footer()
             footer = self.page.locator("footer").first
-            link = footer.locator(f"a[href*='{href}']").first
+            # Tìm với cả old URL lẫn new URL
+            link = footer.locator(
+                f"a[href*='{old_href}'], a[href*='{new_href}'], a:has-text('{label}')"
+            ).first
             link_ok = link.is_visible(timeout=5_000)
             self._record_check(TC, f"Footer Chính sách: {label} visible",
                                "✅ PASS" if link_ok else "❌ FAIL",
                                f"link hiển thị trong footer" if link_ok
-                               else "link không thấy trong footer")
+                               else f"link không thấy (tried {old_href} or {new_href})")
             if i == 1:
                 self._shot(TC, "3", "footer_chinh_sach_links")
             if link_ok:
                 link.click()
                 self.page.wait_for_load_state("domcontentloaded", timeout=15_000)
                 self.page.wait_for_timeout(1_000)
-                self._verify_page(href, label, f"4_{i}", keywords=kws)
+                # Verify: chấp nhận cả old lẫn new path
+                url = self.page.url
+                url_ok = old_href in url or new_href in url
+                try:
+                    body_text = self.page.evaluate("() => (document.body.innerText || '').trim()")
+                except Exception:
+                    body_text = ""
+                has_content = len(body_text) > 300
+                kws_ok = all(kw.lower() in body_text.lower() for kw in kws)
+                is_error = any(p in body_text.lower() for p in ["trang không tồn tại", "page not found", "lỗi 404"])
+                ok = url_ok and has_content and kws_ok and not is_error
+                self._record_check(TC, f"Verify: {label}",
+                                   "✅ PASS" if ok else "❌ FAIL",
+                                   f"URL: {url}" if ok else f"url_ok={url_ok}, kws_ok={kws_ok}, error={is_error}, URL: {url}")
+                self._shot(TC, f"4_{i}", f"page_{label[:20].lower().replace(' ', '_')}")
             else:
                 self._record_check(TC, f"Verify: {label}", "⚠️ WARN", "skip — link không thấy")
 
         # ══ PHẦN 3: HƯỚNG DẪN — 3 LINKS ═════════════════════════════════════
 
-        # (href, label, keywords, required) — required=False → 404 chỉ là WARN, không FAIL
         HUONG_DAN_LINKS = [
-            ("/pages/huong-dan-mua-hang", "Hướng dẫn mua hàng", ["mua hàng"], True),
-            ("/pages/huong-dan-bao-quan", "Hướng dẫn bảo quản", [],           False),  # optional — có thể chưa có nội dung
-            ("/pages/lien-he-cskh",       "Liên hệ CSKH",       ["liên hệ"], True),
+            ("/pages/huong-dan-mua-hang", "/shopping-guide", "Hướng dẫn mua hàng", ["mua hàng"], True),
+            ("/pages/huong-dan-bao-quan", "/care-guide",     "Hướng dẫn bảo quản", [],           False),
+            ("/pages/lien-he-cskh",       "/support",        "Liên hệ CSKH",       ["liên hệ"], True),
         ]
-        for i, (href, label, kws, required) in enumerate(HUONG_DAN_LINKS, start=1):
+        for i, (old_href, new_href, label, kws, required) in enumerate(HUONG_DAN_LINKS, start=1):
             self._go_home_and_scroll_footer()
             footer = self.page.locator("footer").first
-            link = footer.locator(f"a[href*='{href}']").first
+            link = footer.locator(
+                f"a[href*='{old_href}'], a[href*='{new_href}'], a:has-text('{label}')"
+            ).first
             link_ok = link.is_visible(timeout=5_000)
             self._record_check(TC, f"Footer Hướng dẫn: {label} visible",
                                "✅ PASS" if link_ok else "❌ FAIL",
                                f"link hiển thị trong footer" if link_ok
-                               else "link không thấy trong footer")
+                               else f"link không thấy (tried {old_href} or {new_href})")
             if i == 1:
                 self._shot(TC, "5", "footer_huong_dan_links")
             if link_ok:
                 link.click()
                 self.page.wait_for_load_state("domcontentloaded", timeout=15_000)
                 self.page.wait_for_timeout(1_000)
-                if not required:
-                    # Trang không bắt buộc → kiểm tra nhẹ, 404 chỉ là WARN
+                url = self.page.url
+                url_ok = old_href in url or new_href in url
+                try:
                     body = self.page.evaluate("() => (document.body.innerText || '').trim()")
-                    is_404 = any(p in body.lower() for p in ["trang không tồn tại", "page not found", "lỗi 404"])
-                    _env_label = "TEST" if "test." in getattr(self.env, "fe_url", "") else "PROD"
+                except Exception:
+                    body = ""
+                is_404 = any(p in body.lower() for p in ["trang không tồn tại", "page not found", "lỗi 404"])
+                if not required:
                     self._record_check(TC, f"Verify: {label}",
                                        "⚠️ WARN" if is_404 else "✅ PASS",
-                                       f"Trang chưa có nội dung trên {_env_label} env" if is_404
-                                       else f"✓ {self.page.url}")
+                                       f"Trang 404/chưa có" if is_404 else f"✓ {url}")
                     self._shot(TC, f"6_{i}", f"page_{label[:20].lower().replace(' ', '_')}")
                 else:
-                    self._verify_page(href, label, f"6_{i}", keywords=kws)
+                    has_content = len(body) > 300
+                    kws_ok = all(kw.lower() in body.lower() for kw in kws)
+                    ok = url_ok and has_content and kws_ok and not is_404
+                    self._record_check(TC, f"Verify: {label}",
+                                       "✅ PASS" if ok else "❌ FAIL",
+                                       f"URL: {url}" if ok else f"url_ok={url_ok}, kws_ok={kws_ok}, error={is_404}")
+                    self._shot(TC, f"6_{i}", f"page_{label[:20].lower().replace(' ', '_')}")
             else:
                 self._record_check(TC, f"Verify: {label}", "⚠️ WARN", "skip — link không thấy")
 

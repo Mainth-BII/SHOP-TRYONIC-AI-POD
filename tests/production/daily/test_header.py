@@ -43,16 +43,28 @@ class TestDailyHeader(BaseDailyTest):
         self._shot(TC, step, f"page_{page_label.lower().replace(' ', '_')[:20]}")
         return ok
 
+    # Mega menu panel selector — fixed panel below header
+    _MEGA_PANEL = "[class*='backdrop-blur-xl'][class*='fixed'], [class*='shadow-xl'][class*='w-full'][class*='fixed']"
+
     def _open_dropdown(self, btn_selector: str) -> bool:
-        """Hover lên nav button → mở dropdown."""
+        """Hover lên nav button → chờ mega menu panel mở."""
         self.home.navigate()
         self.page.wait_for_timeout(1_000)
         btn = self.page.locator(f"header {btn_selector}").first
         if not btn.is_visible(timeout=5_000):
             return False
         btn.hover()
-        self.page.wait_for_timeout(800)
-        return True
+        # Chờ mega panel xuất hiện (retry 1 lần nếu cần)
+        for _attempt in range(2):
+            try:
+                self.page.wait_for_selector(self._MEGA_PANEL, state="visible", timeout=2_000)
+                self.page.wait_for_timeout(200)
+                return True
+            except Exception:
+                if _attempt == 0:
+                    btn.hover()  # thử hover lại
+                    self.page.wait_for_timeout(600)
+        return True  # tiếp tục dù không confirm được panel
 
     # ── Test ─────────────────────────────────────────────────────────────────
 
@@ -108,16 +120,19 @@ class TestDailyHeader(BaseDailyTest):
         # ══ PHẦN 2: SẢN PHẨM → ÁO TRƠN ═════════════════════════════════════
 
         self._open_dropdown("button:has-text('Sản phẩm')")
-        self._shot(TC, "3", "san_pham_dropdown")
-
-        ao_tron = self.page.locator("a[href*='/san-pham']").first
-        ao_tron_ok = ao_tron.is_visible(timeout=5_000)
+        ao_tron = self.page.locator(
+            f"{self._MEGA_PANEL} a[href*='/san-pham'], a[href='/san-pham']"
+        ).first
+        ao_tron_ok = ao_tron.is_visible(timeout=3_000)
+        # Lưu href TRƯỚC khi screenshot (scroll có thể đóng mega panel)
+        ao_tron_href = ao_tron.get_attribute("href") if ao_tron_ok else None
         self._record_check(TC, "Dropdown: link Áo trơn hiển thị",
                            "✅ PASS" if ao_tron_ok else "❌ FAIL",
                            "/san-pham link visible")
-        if ao_tron_ok:
-            ao_tron.click()
-            self.page.wait_for_load_state("domcontentloaded", timeout=15_000)
+        self._shot(TC, "3", "san_pham_dropdown")
+        if ao_tron_ok and ao_tron_href:
+            self.page.goto(self.env.fe_url + ao_tron_href if ao_tron_href.startswith("/") else ao_tron_href,
+                           wait_until="domcontentloaded", timeout=15_000)
             self.page.wait_for_timeout(1_500)
             self._verify_page("/san-pham", "Áo trơn", "4")
         else:
@@ -126,67 +141,95 @@ class TestDailyHeader(BaseDailyTest):
         # ══ PHẦN 3: SẢN PHẨM → THIẾT KẾ ÁO (STUDIO) ════════════════════════
 
         self._open_dropdown("button:has-text('Sản phẩm')")
-        self._shot(TC, "5", "san_pham_dropdown_2")
-
-        studio_link = self.page.locator("a[href*='/studio']").first
-        studio_ok = studio_link.is_visible(timeout=5_000)
+        studio_link = self.page.locator(
+            f"{self._MEGA_PANEL} a[href*='/studio'], a[href='/studio']"
+        ).first
+        studio_ok = studio_link.is_visible(timeout=3_000)
+        studio_href = studio_link.get_attribute("href") if studio_ok else None
         self._record_check(TC, "Dropdown: link Thiết kế áo hiển thị",
                            "✅ PASS" if studio_ok else "❌ FAIL",
                            "/studio link visible")
-        if studio_ok:
-            studio_link.click()
-            self.page.wait_for_load_state("domcontentloaded", timeout=15_000)
+        self._shot(TC, "5", "san_pham_dropdown_2")
+        if studio_ok and studio_href:
+            self.page.goto(self.env.fe_url + studio_href if studio_href.startswith("/") else studio_href,
+                           wait_until="domcontentloaded", timeout=15_000)
             self.page.wait_for_timeout(1_500)
             self._verify_page("/studio", "Thiết kế áo (Studio)", "6")
         else:
             self._record_check(TC, "Verify: Thiết kế áo (Studio)", "⚠️ WARN", "skip — link không thấy")
 
         # ══ PHẦN 4: CHÍNH SÁCH → 5 LINKS ═════════════════════════════════════
+        # Hỗ trợ cả old URLs (/pages/...) và new short URLs (/payment-policy v.v.)
 
         CHINH_SACH_LINKS = [
-            ("/pages/chinh-sach-thanh-toan", "Chính sách thanh toán"),
-            ("/pages/chinh-sach-van-chuyen", "Chính sách vận chuyển"),
-            ("/pages/chinh-sach-doi-tra",    "Chính sách đổi sản phẩm"),
-            ("/pages/chinh-sach-bao-mat",    "Bảo mật thông tin"),
-            ("/pages/dieu-khoan-su-dung",    "Điều khoản sử dụng"),
+            ("/pages/chinh-sach-thanh-toan", "/payment-policy",  "Chính sách thanh toán"),
+            ("/pages/chinh-sach-van-chuyen", "/shipping-policy", "Chính sách vận chuyển"),
+            ("/pages/chinh-sach-doi-tra",    "/return-policy",   "Chính sách đổi sản phẩm"),
+            ("/pages/chinh-sach-bao-mat",    "/privacy-policy",  "Bảo mật thông tin"),
+            ("/pages/dieu-khoan-su-dung",    "/terms",           "Điều khoản sử dụng"),
         ]
-        for i, (href, label) in enumerate(CHINH_SACH_LINKS, start=1):
+        for i, (old_href, new_href, label) in enumerate(CHINH_SACH_LINKS, start=1):
             self._open_dropdown("button:has-text('Chính sách')")
-            if i == 1:
-                self._shot(TC, "7", "chinh_sach_dropdown")
-            link = self.page.locator(f"a[href*='{href}']").first
-            link_ok = link.is_visible(timeout=5_000)
+            link = self.page.locator(
+                f"{self._MEGA_PANEL} a[href*='{old_href}'], "
+                f"{self._MEGA_PANEL} a[href*='{new_href}'], "
+                f"a[href='{old_href}'], a[href='{new_href}']"
+            ).first
+            link_ok = link.is_visible(timeout=3_000)
+            # Lưu href TRƯỚC screenshot để tránh locator stale sau scroll
+            actual_href = link.get_attribute("href") if link_ok else None
             self._record_check(TC, f"Dropdown Chính sách: {label} visible",
                                "✅ PASS" if link_ok else "❌ FAIL",
-                               f"{href} link visible" if link_ok else "link không thấy")
-            if link_ok:
-                link.click()
-                self.page.wait_for_load_state("domcontentloaded", timeout=15_000)
+                               f"link visible" if link_ok else "link không thấy")
+            if i == 1:
+                self._shot(TC, "7", "chinh_sach_dropdown")
+            if link_ok and actual_href:
+                dest = self.env.fe_url + actual_href if actual_href.startswith("/") else actual_href
+                self.page.goto(dest, wait_until="domcontentloaded", timeout=15_000)
                 self.page.wait_for_timeout(1_000)
-                self._verify_page(href, label, f"8_{i}")
+                # Verify: chấp nhận cả old path lẫn new path
+                url = self.page.url
+                url_ok = old_href in url or new_href in url
+                has_content = self.page.locator("h1, h2, main").first.is_visible(timeout=8_000)
+                self._record_check(TC, f"Verify: {label}",
+                                   "✅ PASS" if (url_ok and has_content) else "❌ FAIL",
+                                   f"URL: {url}")
+                self._shot(TC, f"8_{i}", f"page_{label[:15].lower().replace(' ', '_')}")
             else:
                 self._record_check(TC, f"Verify: {label}", "⚠️ WARN", "skip")
 
         # ══ PHẦN 5: HƯỚNG DẪN → 2 LINKS ═════════════════════════════════════
 
         HUONG_DAN_LINKS = [
-            ("/pages/huong-dan-mua-hang", "Hướng dẫn mua hàng"),
-            ("/pages/huong-dan-bao-quan", "Hướng dẫn bảo quản"),
+            ("/pages/huong-dan-mua-hang", "/shopping-guide", "Hướng dẫn mua hàng"),
+            ("/pages/huong-dan-bao-quan", "/care-guide",     "Hướng dẫn bảo quản"),
         ]
-        for i, (href, label) in enumerate(HUONG_DAN_LINKS, start=1):
+        for i, (old_href, new_href, label) in enumerate(HUONG_DAN_LINKS, start=1):
             self._open_dropdown("button:has-text('Hướng dẫn')")
-            if i == 1:
-                self._shot(TC, "9", "huong_dan_dropdown")
-            link = self.page.locator(f"a[href*='{href}']").first
-            link_ok = link.is_visible(timeout=5_000)
+            link = self.page.locator(
+                f"{self._MEGA_PANEL} a[href*='{old_href}'], "
+                f"{self._MEGA_PANEL} a[href*='{new_href}'], "
+                f"a[href='{old_href}'], a[href='{new_href}']"
+            ).first
+            link_ok = link.is_visible(timeout=3_000)
+            # Lưu href TRƯỚC screenshot để tránh locator stale sau scroll
+            hd_href = link.get_attribute("href") if link_ok else None
             self._record_check(TC, f"Dropdown Hướng dẫn: {label} visible",
                                "✅ PASS" if link_ok else "❌ FAIL",
-                               f"{href} link visible" if link_ok else "link không thấy")
-            if link_ok:
-                link.click()
-                self.page.wait_for_load_state("domcontentloaded", timeout=15_000)
+                               f"link visible" if link_ok else "link không thấy")
+            if i == 1:
+                self._shot(TC, "9", "huong_dan_dropdown")
+            if link_ok and hd_href:
+                dest = self.env.fe_url + hd_href if hd_href.startswith("/") else hd_href
+                self.page.goto(dest, wait_until="domcontentloaded", timeout=15_000)
                 self.page.wait_for_timeout(1_000)
-                self._verify_page(href, label, f"10_{i}")
+                url = self.page.url
+                url_ok = old_href in url or new_href in url
+                has_content = self.page.locator("h1, h2, main").first.is_visible(timeout=8_000)
+                self._record_check(TC, f"Verify: {label}",
+                                   "✅ PASS" if (url_ok and has_content) else "❌ FAIL",
+                                   f"URL: {url}")
+                self._shot(TC, f"10_{i}", f"page_{label[:15].lower().replace(' ', '_')}")
             else:
                 self._record_check(TC, f"Verify: {label}", "⚠️ WARN", "skip")
 
@@ -205,7 +248,14 @@ class TestDailyHeader(BaseDailyTest):
             ve_btn.click()
             self.page.wait_for_load_state("domcontentloaded", timeout=15_000)
             self.page.wait_for_timeout(1_000)
-            self._verify_page("/pages/ve-chung-toi", "Về Tryonic AI", "11")
+            # Chấp nhận cả old URL (/pages/ve-chung-toi) lẫn new URL (/about-us)
+            url = self.page.url
+            url_ok = "/ve-chung-toi" in url or "/about-us" in url
+            has_content = self.page.locator("h1, h2, main").first.is_visible(timeout=8_000)
+            self._record_check(TC, "Verify: Về Tryonic AI",
+                               "✅ PASS" if (url_ok and has_content) else "❌ FAIL",
+                               f"URL: {url}")
+            self._shot(TC, "11", "page_ve_tryonic_ai")
         else:
             self._record_check(TC, "Verify: Về Tryonic AI", "⚠️ WARN", "skip")
 

@@ -142,22 +142,32 @@ class TestDailyAuthLogin(BaseDailyTest):
 
         # ── 4. Logout — navigate về home trước (Studio header có thể khác cấu trúc) ──
         self.home.navigate()
-        self.page.wait_for_timeout(1_000)
-        try:
-            self.home.header.logout()
-        except Exception as e:
-            print(f"  [WARN] logout() error: {e}")
-            # Thử cách khác: click trực tiếp vào logout button trong menu
+        self.page.wait_for_timeout(1_500)
+
+        # Verify vẫn còn logged in sau khi navigate
+        still_auth = self.home.header.is_logged_in(timeout=3_000)
+        if not still_auth:
+            print("  [WARN] Không còn đăng nhập sau navigate — skip logout")
+        else:
+            # Cách 1: dùng header.logout() đã cải thiện
+            logout_success = False
             try:
-                self.home.header.open_profile_menu()
-                self.page.wait_for_timeout(500)
-                self.page.locator(
-                    "button:has-text('Đăng xuất'), a:has-text('Đăng xuất'), "
-                    "[role='menuitem']:has-text('Đăng xuất')"
-                ).first.click()
-                self.page.wait_for_timeout(2_000)
-            except Exception as e2:
-                print(f"  [WARN] fallback logout error: {e2}")
+                self.home.header.logout()
+                logout_success = True
+            except Exception as e:
+                print(f"  [WARN] logout() error: {e}")
+
+            # Cách 2 fallback: open menu manually rồi click :visible logout btn
+            if not logout_success or self.home.header.is_logged_in(timeout=2_000):
+                try:
+                    self.home.header.open_profile_menu()
+                    self.page.wait_for_timeout(800)
+                    btn = self.page.locator("button:has-text('Đăng xuất'):visible").first
+                    btn.click(timeout=5_000)
+                    self.page.wait_for_timeout(2_000)
+                    print("  [INFO] fallback logout thành công")
+                except Exception as e2:
+                    print(f"  [WARN] fallback logout error: {e2}")
 
         self._shot(TC, "5", "after_logout")
 

@@ -20,6 +20,10 @@ _TEST_ORDER = [
     "test_cart_checkout_price",    # 12
     "test_print_tech_smoke",    # 13 — phải sau artwork
     "test_tryon_smoke",         # 14 — phải sau artwork
+    "test_pt01_buynow",         # 15 — Design BuyNow PT01
+    "test_m21_cart",            # 16 — Design Cart M21 all sizes
+    "test_pt01_mydesigns",      # 17 — Design My Designs PT01
+    "test_multi_cart",          # 18 — Design Multi-Cart PT01 + M21
 ]
 
 
@@ -53,12 +57,18 @@ def _save_daily_reports():
     from production.daily.test_library_delete  import TestDailyLibraryDelete
     from production.daily.test_auth_login      import TestDailyAuthLogin
     from production.daily.test_forgot_password import TestDailyForgotPassword
+    from production.daily.test_design_buynow_daily   import TestDailyDesignBuynow
+    from production.daily.test_design_cart_m21_daily import TestDailyDesignCartM21
+    from production.daily.test_design_mydesigns_daily import TestDailyDesignMydesigns
+    from production.daily.test_design_multi_cart_daily import TestDailyDesignMultiCart
 
     _ALL_CLASSES = (
         TestDailyPriceCheckout, TestDailySizeGuide, TestDailyCheckoutSummary,
         TestDailyTryon, TestDailyPrintTech, TestDailyArtwork,
         TestDailyHeader, TestDailyFooter, TestDailyProfile,
         TestDailyLibraryDelete, TestDailyAuthLogin, TestDailyForgotPassword,
+        TestDailyDesignBuynow, TestDailyDesignCartM21,
+        TestDailyDesignMydesigns, TestDailyDesignMultiCart,
     )
 
     # ── Lưu markdown + CSV từng suite ────────────────────────────────────────

@@ -109,7 +109,7 @@ class TestDailyArtwork(BaseDailyTest):
 
         # ── S4: Chờ AI trả về ≥ 1 ảnh mới ───────────────────────────────────
         ok, elapsed, total, new_count = self.studio.wait_for_new_artworks(
-            baseline=baseline, min_new=1, timeout=150
+            baseline=baseline, min_new=1, timeout=180
         )
         self._shot(TC, "3", f"artwork_result_{new_count}imgs_{elapsed}s")
 

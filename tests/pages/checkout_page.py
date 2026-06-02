@@ -623,12 +623,20 @@ class CheckoutPage(BasePage):
                 return v
         return None
 
-    def read_checkout_discount(self) -> int | None:
-        """Đọc số tiền giảm giá trên checkout."""
-        for label in ("Khuyến mãi", "Giảm giá", "Discount"):
-            v = self._read_price_label(label)
-            if v:
-                return v
+    def read_checkout_discount(self, retries: int = 5, wait_ms: int = 1_200) -> int | None:
+        """Đọc số tiền giảm giá (dòng promo 'Khuyến mãi (CODE)') trên checkout.
+
+        Dòng này chỉ render khi mã đã apply thành công (FE: checkoutPromoApplied).
+        Trên CI chậm dòng render trễ → retry vài lần. CHỈ dùng label chính xác
+        để tránh vớ nhầm số tiền của dòng khác (Tổng cộng / giá sản phẩm).
+        """
+        labels = ("Khuyến mãi", "Giảm giá", "Discount")
+        for _attempt in range(max(1, retries)):
+            for label in labels:
+                v = self._read_price_label(label)
+                if v:
+                    return v
+            self.page.wait_for_timeout(wait_ms)
         return None
 
     def read_checkout_total(self) -> int | None:
@@ -674,31 +682,61 @@ class CheckoutPage(BasePage):
             pass
         return None
 
-    def apply_discount_code(self, code: str) -> bool:
-        """Nhập mã giảm giá và apply. Trả về True nếu thành công."""
+    def _promo_error_text(self) -> str | None:
+        """Trả về text lỗi mã giảm giá nếu có (FE: checkoutPromoError, p.text-red-500)."""
         try:
-            inp = self.page.locator(
-                "input[placeholder*='mã'], input[placeholder*='khuyến'], "
-                "input[placeholder*='discount'], input[name*='coupon'], input[name*='voucher']"
-            ).first
-            if inp.is_visible(timeout=3000):
+            for sel in ("p.text-red-500", "[class*='text-red']"):
+                loc = self.page.locator(sel).filter(
+                    has_text="mã"
+                ).first
+                if loc.is_visible(timeout=400):
+                    return (loc.inner_text(timeout=400) or "").strip()
+        except Exception:
+            pass
+        return None
+
+    def apply_discount_code(self, code: str, retries: int = 3) -> bool:
+        """Nhập + apply mã giảm giá. Trả về True CHỈ KHI xác nhận đã áp dụng
+        (dòng promo 'Khuyến mãi (CODE)' hiện ra / đọc được số giảm).
+
+        Validate là API async → trên CI cần poll chờ kết quả thay vì chờ cứng.
+        Nếu BE trả lỗi (hết hạn/không hợp lệ) → trả False ngay (không retry vô ích).
+        """
+        inp_sel = (
+            "input[placeholder*='khuyến' i], input[placeholder*='mã' i], "
+            "input[placeholder*='discount' i], input[name*='coupon'], "
+            "input[name*='voucher']"
+        )
+        for _attempt in range(max(1, retries)):
+            try:
+                inp = self.page.locator(inp_sel).first
+                if not inp.is_visible(timeout=3_000):
+                    return False
                 inp.click()
+                inp.fill("")
                 inp.fill(code)
                 self.page.wait_for_timeout(300)
                 apply_btn = self.page.locator(
-                    "button:has-text('Áp dụng'), button:has-text('Apply'), "
-                    "button:has-text('Dùng'), button[type='submit']:near(input)"
+                    "#btn-apply-promo, button:has-text('Áp dụng'), "
+                    "button:has-text('Apply'), button:has-text('Dùng')"
                 ).first
-                if apply_btn.is_visible(timeout=2000):
+                if apply_btn.is_visible(timeout=2_000):
                     apply_btn.click()
-                    self.page.wait_for_timeout(1500)
-                    return True
-                inp.press("Enter")
-                self.page.wait_for_timeout(1500)
-                return True
-        except Exception:
-            pass
-        return False
+                else:
+                    inp.press("Enter")
+                # Poll tối đa ~8s: thành công (đọc được discount) hoặc lỗi BE
+                for _ in range(8):
+                    self.page.wait_for_timeout(1_000)
+                    if self.read_checkout_discount(retries=1, wait_ms=0):
+                        return True
+                    err = self._promo_error_text()
+                    if err and any(k in err.lower() for k in (
+                        "hết hạn", "không hợp lệ", "khong hop le", "invalid", "expired"
+                    )):
+                        return False  # mã lỗi thật — không retry
+            except Exception:
+                pass
+        return bool(self.read_checkout_discount(retries=1, wait_ms=0))
 
     def click_checkout_payment(self) -> bool:
         """Click nút 'Thanh toán' / 'Đặt hàng' cuối checkout."""

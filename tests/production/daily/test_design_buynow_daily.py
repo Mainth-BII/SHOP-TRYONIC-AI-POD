@@ -191,10 +191,18 @@ class TestDailyDesignBuynow(BaseDailyTest):
         self._record_check("MH3", "Open order modal → /review", "✅ PASS", self.page.url)
 
         # ── MH12: Review ──────────────────────────────────────────────────────
-        review_data = self._read_review_prices()
-        ao_review    = review_data.get("ao_total", 0) or 0
-        print_review = review_data.get("print_total", 0) or 0
-        sum_review   = review_data.get("sum_total", 0) or 0
+        # CI chậm → trang /review có thể chưa render giá khi đọc. Retry tới khi
+        # đọc được sum_total (chờ tối đa ~12s).
+        review_data = {}
+        sum_review = ao_review = print_review = 0
+        for _attempt in range(6):
+            review_data = self._read_review_prices() or {}
+            ao_review    = review_data.get("ao_total", 0) or 0
+            print_review = review_data.get("print_total", 0) or 0
+            sum_review   = review_data.get("sum_total", 0) or 0
+            if sum_review > 0:
+                break
+            self.page.wait_for_timeout(2_000)
         # Khi ao/in breakdown = 0, dùng sum_review (đọc được từ trang) làm unit
         unit = (ao_review + print_review) if (ao_review + print_review) > 0 else sum_review
         print(f"  [INFO] Review prices: ao={ao_review}, in={print_review}, sum={sum_review}")
@@ -271,26 +279,29 @@ class TestDailyDesignBuynow(BaseDailyTest):
         self._assert_price(shipping, expected_ship, "MH5 Phí giao hàng",    mh="MH5")
         self._assert_price(total,    expected_tot,  "MH5 Tổng thanh toán",  mh="MH5")
 
-        # Apply GIAM20
+        # Apply GIAM20 (apply_discount_code đã poll xác nhận áp dụng thành công)
         applied = self.checkout.apply_discount_code("GIAM20")
-        self.page.wait_for_timeout(2_000)
         self._shot(TC, "10", "giam20_applied")
 
         discount = self.checkout.read_checkout_discount()
         total_after = self.checkout.read_checkout_total()
         expected_discount = int((unit if unit > 0 else _SALE_AO) * _GIAM20_RATE)
-        print(f"  [INFO] GIAM20: discount={discount}, total_after={total_after}, "
-              f"expected_discount={expected_discount:,}đ")
+        print(f"  [INFO] GIAM20: applied={applied}, discount={discount}, "
+              f"total_after={total_after}, expected_discount={expected_discount:,}đ")
 
         self._record_check("MH5", "Apply GIAM20",
                            "✅ PASS" if applied else "⚠️ WARN",
                            f"applied={applied}")
-        if discount:
+        # Chỉ hard-assert khi đã xác nhận apply VÀ đọc được số giảm (tránh fail
+        # oan khi mã lỗi data/PROD — đó là WARN, không phải lỗi test code).
+        if applied and discount:
             self._assert_price(discount, expected_discount, "MH5 GIAM20 discount amount",
                                mh="MH5")
         else:
             self._record_check("MH5", "GIAM20 discount line", "⚠️ WARN",
-                               "Không đọc được discount", f"expected ~{expected_discount:,}đ")
+                               f"applied={applied}, discount={discount} — mã GIAM20 "
+                               f"không áp dụng được (kiểm tra mã trên PROD)",
+                               f"expected ~{expected_discount:,}đ")
 
         # ── PROD SAFETY STOP ──────────────────────────────────────────────────
         self._record_check("MH5", "STOP — Không click Thanh toán", "✅ PASS",

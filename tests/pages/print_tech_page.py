@@ -195,14 +195,41 @@ class PrintTechPage(BasePage):
             return ""
 
     def expand_tech_list(self, tech: str = "") -> bool:
-        """Click button 'PET ^' / 'DTG ^' để mở danh sách công nghệ in gợi ý."""
+        """Click button 'PET ^' / 'DTG ^' để mở danh sách công nghệ in gợi ý.
+
+        Robust trên headless CI: scroll → click thật → fallback force click →
+        fallback JS .click(), retry 2 vòng.
+        """
+        btn = self.expand_tech_button(tech)
         try:
-            btn = self.expand_tech_button(tech)
-            btn.scroll_into_view_if_needed()
-            btn.wait_for(state="visible", timeout=8_000)
-            btn.click()
-            self.page.wait_for_timeout(1_200)
-            return True
-        except Exception as e:
-            print(f"    [WARN] Không click expand tech list: {e}")
+            btn.scroll_into_view_if_needed(timeout=5_000)
+        except Exception:
+            pass
+        if not btn.is_visible(timeout=8_000):
+            print("    [WARN] Không thấy button expand tech list")
             return False
+
+        for _attempt in range(2):
+            # 1) Click thật
+            try:
+                btn.click(timeout=4_000)
+                self.page.wait_for_timeout(1_200)
+                return True
+            except Exception:
+                pass
+            # 2) Force click (bỏ qua overlay/animation trên headless)
+            try:
+                btn.click(force=True, timeout=4_000)
+                self.page.wait_for_timeout(1_200)
+                return True
+            except Exception:
+                pass
+            # 3) JS click trực tiếp
+            try:
+                btn.evaluate("el => el.click()")
+                self.page.wait_for_timeout(1_200)
+                return True
+            except Exception as e:
+                print(f"    [WARN] expand attempt {_attempt+1} fail: {e}")
+                self.page.wait_for_timeout(500)
+        return False

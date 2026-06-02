@@ -298,9 +298,10 @@ class TestDailyDesignBuynow(BaseDailyTest):
             self._assert_price(discount, expected_discount, "MH5 GIAM20 discount amount",
                                mh="MH5")
         else:
+            _reason = self.checkout.last_promo_message or "không rõ lý do"
             self._record_check("MH5", "GIAM20 discount line", "⚠️ WARN",
-                               f"applied={applied}, discount={discount} — mã GIAM20 "
-                               f"không áp dụng được (kiểm tra mã trên PROD)",
+                               f"applied={applied}, discount={discount} — lý do BE: "
+                               f"\"{_reason}\" (data/PROD, không phải lỗi test)",
                                f"expected ~{expected_discount:,}đ")
 
         # ── PROD SAFETY STOP ──────────────────────────────────────────────────

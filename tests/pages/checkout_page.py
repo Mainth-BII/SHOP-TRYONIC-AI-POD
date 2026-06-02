@@ -10,6 +10,10 @@ class CheckoutPage(BasePage):
 
     MH_DIR = "MH08_checkout"
 
+    # Lý do thật khi apply mã giảm giá thất bại (BE message). Set bởi
+    # apply_discount_code(); test đọc để surface ra WARN cho minh bạch.
+    last_promo_message: str | None = None
+
     def __init__(self, page: Page, base_url: str = ""):
         super().__init__(page, base_url)
 
@@ -683,14 +687,34 @@ class CheckoutPage(BasePage):
         return None
 
     def _promo_error_text(self) -> str | None:
-        """Trả về text lỗi mã giảm giá nếu có (FE: checkoutPromoError, p.text-red-500)."""
+        """Trả về text lỗi mã giảm giá nếu có.
+
+        FE render lỗi ở: <p class="text-[12px] text-red-500 ml-1">{message}</p>
+        ngay dưới ô nhập mã (checkoutPromoError). Message do BE trả về nên có
+        thể KHÔNG chứa chữ 'mã' (vd 'Đơn hàng chưa đạt giá trị tối thiểu',
+        'Đã được sử dụng') → KHÔNG lọc theo 'mã', mà lấy mọi text đỏ ngắn
+        gần ô nhập, bỏ qua lỗi field khác (địa chỉ/email/sđt).
+        """
+        _FIELD_NOISE = ("địa chỉ", "email", "điện thoại", "họ tên", "ký tự")
         try:
-            for sel in ("p.text-red-500", "[class*='text-red']"):
-                loc = self.page.locator(sel).filter(
-                    has_text="mã"
-                ).first
-                if loc.is_visible(timeout=400):
-                    return (loc.inner_text(timeout=400) or "").strip()
+            locs = self.page.locator("p.text-red-500, p[class*='text-red']")
+            n = min(locs.count(), 8)
+            for i in range(n):
+                el = locs.nth(i)
+                try:
+                    if not el.is_visible(timeout=300):
+                        continue
+                    txt = (el.inner_text(timeout=300) or "").strip()
+                except Exception:
+                    continue
+                if not txt or len(txt) > 120:
+                    continue
+                low = txt.lower()
+                if any(f in low for f in _FIELD_NOISE):
+                    continue
+                # Ưu tiên message liên quan mã/khuyến mãi/giảm giá; nếu không có
+                # từ khoá field-noise thì coi đây là lỗi promo.
+                return txt
         except Exception:
             pass
         return None
@@ -702,6 +726,9 @@ class CheckoutPage(BasePage):
         Validate là API async → trên CI cần poll chờ kết quả thay vì chờ cứng.
         Nếu BE trả lỗi (hết hạn/không hợp lệ) → trả False ngay (không retry vô ích).
         """
+        # Lưu lý do thật (message BE) để test surface ra WARN — phân biệt
+        # data-issue (hết hạn / đã dùng / chưa đủ điều kiện) vs lỗi test.
+        self.last_promo_message = None
         inp_sel = (
             "input[placeholder*='khuyến' i], input[placeholder*='mã' i], "
             "input[placeholder*='discount' i], input[name*='coupon'], "
@@ -711,6 +738,7 @@ class CheckoutPage(BasePage):
             try:
                 inp = self.page.locator(inp_sel).first
                 if not inp.is_visible(timeout=3_000):
+                    self.last_promo_message = "không tìm thấy ô nhập mã (chưa tới checkout?)"
                     return False
                 inp.click()
                 inp.fill("")
@@ -730,12 +758,18 @@ class CheckoutPage(BasePage):
                     if self.read_checkout_discount(retries=1, wait_ms=0):
                         return True
                     err = self._promo_error_text()
-                    if err and any(k in err.lower() for k in (
-                        "hết hạn", "không hợp lệ", "khong hop le", "invalid", "expired"
-                    )):
-                        return False  # mã lỗi thật — không retry
+                    if err:
+                        self.last_promo_message = err
+                        if any(k in err.lower() for k in (
+                            "hết hạn", "không hợp lệ", "khong hop le", "invalid",
+                            "expired", "đã được sử dụng", "đã sử dụng", "hết lượt",
+                            "tối thiểu", "không đủ", "không áp dụng",
+                        )):
+                            return False  # lý do data thật — không retry
             except Exception:
                 pass
+        if not self.last_promo_message:
+            self.last_promo_message = "không xác nhận được áp dụng (không có dòng giảm giá, không có thông báo lỗi)"
         return bool(self.read_checkout_discount(retries=1, wait_ms=0))
 
     def click_checkout_payment(self) -> bool:
@@ -1369,22 +1403,42 @@ class CheckoutPage(BasePage):
     _CART_PANEL_SEL = "[class*='max-w-md'][class*='shadow']"
     # Nút giỏ hàng trên header: <button> chứa span material-symbol 'shopping_cart'
     # (kèm tooltip 'Giỏ hàng'). Không có data-testid/aria-label nên dò theo text.
+    # Hai loại nút giỏ hàng tuỳ trang:
+    #  • SiteHeader: <span class="material-symbols-outlined">shopping_cart</span> (có text)
+    #  • StudioTopBar (trang /studio/.../order): icon lucide <svg class="lucide-shopping-cart">
+    #    KHÔNG có text → phải dò theo svg, nếu không sẽ không tìm thấy nút.
     _CART_BTN_SEL = (
         "header button:has-text('shopping_cart'), "
         "header button:has-text('Giỏ hàng'), "
-        "button:has-text('shopping_cart')"
+        "header button:has(svg.lucide-shopping-cart), "
+        "header button:has(svg[class*='shopping-cart']), "
+        "button:has-text('shopping_cart'), "
+        "button:has(svg.lucide-shopping-cart), "
+        "button:has(svg[class*='shopping-cart'])"
     )
 
-    def _cart_panel_open(self, timeout: int = 1_500) -> bool:
-        try:
-            if self.page.locator(self._CART_PANEL_SEL).first.is_visible(timeout=timeout):
-                return True
-        except Exception:
-            pass
-        try:
-            return self.page.locator("h2:has-text('Giỏ hàng')").first.is_visible(timeout=600)
-        except Exception:
-            return False
+    # Tín hiệu ĐẶC TRƯNG RIÊNG của CartDrawer (slide-in panel bên phải) — phải
+    # phân biệt được với trang Đặt hàng (cũng có chữ 'Tổng tiền' ở mục giá!):
+    #   • <h2>Giỏ hàng (N)</h2>  (heading drawer)
+    #   • nút 'Thanh toán ngay'  (trang order dùng 'Mua ngay' / 'Thêm vào giỏ')
+    # KHÔNG dùng ':text("Tổng tiền")' (false positive trên trang order) hay
+    # selector class trần (card giá cũng có thể là max-w-md/shadow).
+    _CART_PANEL_SIGNALS = (
+        "h2:has-text('Giỏ hàng')",
+        "button:has-text('Thanh toán ngay')",
+    )
+
+    def _cart_panel_open(self, timeout: int = 3_000) -> bool:
+        """Phát hiện CartDrawer đã mở — poll tín hiệu đặc trưng (chống animation)."""
+        deadline = max(1, timeout // 500)
+        for _ in range(deadline):
+            for sel in self._CART_PANEL_SIGNALS:
+                try:
+                    if self.page.locator(sel).first.is_visible(timeout=400):
+                        return True
+                except Exception:
+                    pass
+        return False
 
     def open_cart_panel(self) -> bool:
         """Mở panel giỏ hàng robust (headed + CI headless). Trả về True nếu mở.
@@ -1419,31 +1473,93 @@ class CheckoutPage(BasePage):
             self.page.wait_for_timeout(600)
         return self._cart_panel_open()
 
-    def read_cart_panel_total(self) -> int | None:
-        """Đọc tổng tiền trong panel giỏ hàng (slide-in panel, trả về int VNĐ)."""
+    def read_cart_panel_total(self, retries: int = 4, wait_ms: int = 800) -> int | None:
+        """Đọc 'Tổng tiền (N thiết kế)' trong panel giỏ hàng (trả về int VNĐ).
+
+        Panel slide-in render trễ → retry. Tìm panel theo nhiều cách: container
+        'max-w-md shadow', hoặc fallback element chứa heading 'Giỏ hàng' /
+        dòng 'Tổng tiền' (phòng khi class đổi).
+        """
         import re as _re
-        raw = self.page.evaluate(r"""() => {
-            const panel = document.querySelector('[class*="max-w-md"][class*="shadow"]');
-            if (!panel) return null;
-            const text = panel.innerText || '';
-            const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-            const priceRe = /(\d{1,3}(?:[,.]\d{3})+)/;
-            for (let i = 0; i < lines.length; i++) {
-                if (/Tổng tiền/i.test(lines[i])) {
-                    let m = lines[i].match(priceRe);
-                    if (m) return m[1];
-                    if (i + 1 < lines.length) {
-                        let m2 = lines[i + 1].match(priceRe);
-                        if (m2) return m2[1];
+        for _attempt in range(max(1, retries)):
+            raw = self.page.evaluate(r"""() => {
+                const priceRe = /(\d{1,3}(?:[,.]\d{3})+)/;
+                // Ứng viên panel: container max-w-md shadow; nếu không có, dùng
+                // phần tử nào chứa cả 'Giỏ hàng' lẫn 'Tổng tiền'.
+                let panel = document.querySelector('[class*="max-w-md"][class*="shadow"]');
+                if (!panel || !/Tổng tiền/i.test(panel.innerText || '')) {
+                    const all = Array.from(document.querySelectorAll('div'));
+                    panel = all.find(d => {
+                        const t = d.innerText || '';
+                        return /Giỏ hàng/i.test(t) && /Tổng tiền/i.test(t) && t.length < 4000;
+                    }) || panel;
+                }
+                if (!panel) return null;
+                const lines = (panel.innerText || '').split('\n')
+                    .map(l => l.trim()).filter(Boolean);
+                for (let i = 0; i < lines.length; i++) {
+                    if (/Tổng tiền/i.test(lines[i])) {
+                        let m = lines[i].match(priceRe);
+                        if (m) return m[1];
+                        if (i + 1 < lines.length) {
+                            let m2 = lines[i + 1].match(priceRe);
+                            if (m2) return m2[1];
+                        }
                     }
                 }
-            }
-            return null;
-        }""")
-        if not raw:
-            return None
-        digits = _re.sub(r"[^\d]", "", str(raw))
-        return int(digits) if digits else None
+                return null;
+            }""")
+            if raw:
+                digits = _re.sub(r"[^\d]", "", str(raw))
+                if digits:
+                    return int(digits)
+            self.page.wait_for_timeout(wait_ms)
+        return None
+
+    def read_cart_breakdown(self, retries: int = 4, wait_ms: int = 800) -> dict:
+        """Đọc chi tiết giá trong drawer giỏ hàng để kiểm tra tính nhất quán.
+
+        Trả về dict:
+          - total      : int|None  — 'Tổng tiền (N thiết kế)' ở footer
+          - lines      : list[int] — giá từng dòng sản phẩm (đã loại total)
+          - line_sum   : int       — tổng giá các dòng
+
+        Dùng để verify line_sum == total (cart tự cộng đúng), thay vì so với
+        giá popup đặt hàng vốn hay đọc thiếu phí in (DTG) → false FAIL.
+        """
+        import re as _re
+        for _attempt in range(max(1, retries)):
+            data = self.page.evaluate(r"""() => {
+                let panel = document.querySelector('[class*="max-w-md"][class*="shadow"]');
+                if (!panel || !/Tổng tiền/i.test(panel.innerText || '')) {
+                    const all = Array.from(document.querySelectorAll('div'));
+                    panel = all.find(d => {
+                        const t = d.innerText || '';
+                        return /Giỏ hàng/i.test(t) && /Tổng tiền/i.test(t) && t.length < 4000;
+                    }) || panel;
+                }
+                if (!panel) return null;
+                const text = panel.innerText || '';
+                // 'Tổng tiền (2 thiết kế)\n410.000đ' — bỏ qua phần '(N thiết kế)'
+                // bằng lazy match đến giá có hậu tố đ/₫ đầu tiên sau 'Tổng tiền'.
+                const totalM = text.match(/Tổng tiền[\s\S]*?(\d{1,3}(?:[.,]\d{3})+)\s*[đ₫]/i);
+                const total = totalM ? totalM[1] : null;
+                const all = [...text.matchAll(/(\d{1,3}(?:[.,]\d{3})+)\s*[đ₫]/gi)]
+                    .map(m => m[1]);
+                return { total, all };
+            }""")
+            if data and (data.get("all") or data.get("total")):
+                def _num(s):
+                    d = _re.sub(r"[^\d]", "", str(s))
+                    return int(d) if d else None
+                total = _num(data.get("total")) if data.get("total") else None
+                prices = [p for p in (_num(x) for x in (data.get("all") or [])) if p]
+                lines = list(prices)
+                if total is not None and total in lines:
+                    lines.remove(total)
+                return {"total": total, "lines": lines, "line_sum": sum(lines)}
+            self.page.wait_for_timeout(wait_ms)
+        return {"total": None, "lines": [], "line_sum": 0}
 
     def click_checkout_from_cart(self) -> bool:
         """Nhấn nút 'Thanh toán ngay' / 'Thanh toán' trong panel giỏ hàng."""

@@ -443,8 +443,18 @@ class TestDailyCheckoutSummary(BaseDailyTest):
             is_coupon_error, coupon_msg = _read_coupon_feedback(self.page)
 
         if is_coupon_error:
-            self._record_check("CLC1_MH2", "CLC1: mã hợp lệ áp dụng", "❌ FAIL",
-                               f"Mã bị từ chối: \"{coupon_msg}\"")
+            # Mã hết hạn / hết lượt là PROD data issue, không phải lỗi test → WARN
+            _msg_lower = (coupon_msg or "").lower()
+            _is_expired = any(k in _msg_lower for k in (
+                "hết hạn", "het han", "expired", "hết lượt", "het luot",
+                "không còn", "khong con", "đã dùng", "da dung",
+            ))
+            self._record_check(
+                "CLC1_MH2", "CLC1: mã hợp lệ áp dụng",
+                "⚠️ WARN" if _is_expired else "❌ FAIL",
+                (f"Mã hết hạn/hết lượt trên PROD (data issue, không phải lỗi test): \"{coupon_msg}\""
+                 if _is_expired else f"Mã bị từ chối: \"{coupon_msg}\""),
+            )
             self.__class__._results = self._results
             self._save_report()
             return

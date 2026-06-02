@@ -223,6 +223,7 @@ def _build_daily_card(
                     {
                         "horizontalSizeStyle": "FILL_AVAILABLE_SPACE",
                         "widgets": [
+                            {"decoratedText": {"topLabel": "⚠️ Warned",  "text": str(total_warned)}},
                             {"decoratedText": {"topLabel": "Pass Rate", "text": pass_rate}},
                         ],
                     },
@@ -267,28 +268,43 @@ def _build_daily_card(
             ],
         })
 
-    # ── Section 4: Issues (WARN + FAIL) ─────────────────────────────────────
-    issue_lines = []
+    # ── Section 4: Lỗi (FAIL) vs Cảnh báo (WARN) — tách riêng ───────────────
+    # FAIL = lỗi thật cần xử lý. WARN = vấn đề data/PROD/headless CI, không
+    # phải lỗi test — gom riêng để noti không nhìn như "hỏng hàng loạt".
+    def _fmt_issue(suite_name, r, icon):
+        suite_label = _suite_display(suite_name)
+        check       = r.get("check", "")[:90]
+        actual      = (r.get("actual", "") or "N/A")[:200].replace("\n", " ")
+        expected    = r.get("expected", "")
+        line = f'{icon} <b>[{suite_label}]</b> {check}\n   → <i>{actual}</i>'
+        if expected:
+            line += f'\n   ✦ mong đợi: {expected[:100]}'
+        return line
+
+    fail_lines, warn_lines = [], []
     for suite_name, data in suites.items():
         for r in data["results"]:
             st = r.get("status", "")
-            if "FAIL" in st or "WARN" in st:
-                icon        = "❌" if "FAIL" in st else "⚠️"
-                suite_label = _suite_display(suite_name)
-                check       = r.get("check", "")[:90]
-                actual      = (r.get("actual", "") or "N/A")[:200].replace("\n", " ")
-                expected    = r.get("expected", "")
-                line = f'{icon} <b>[{suite_label}]</b> {check}\n   → <i>{actual}</i>'
-                if expected:
-                    line += f'\n   ✦ mong đợi: {expected[:100]}'
-                issue_lines.append(line)
+            if "FAIL" in st:
+                fail_lines.append(_fmt_issue(suite_name, r, "❌"))
+            elif "WARN" in st:
+                warn_lines.append(_fmt_issue(suite_name, r, "⚠️"))
 
-    if issue_lines:
+    if fail_lines:
         sections.append({
-            "header":     f"📋 Issues ({len(issue_lines)})",
+            "header":     f"❌ Lỗi cần xử lý ({len(fail_lines)})",
+            "collapsible": False,
+            "widgets": [
+                {"textParagraph": {"text": "\n\n".join(fail_lines)}}
+            ],
+        })
+
+    if warn_lines:
+        sections.append({
+            "header":     f"⚠️ Cảnh báo — không phải lỗi test ({len(warn_lines)})",
             "collapsible": True,
             "widgets": [
-                {"textParagraph": {"text": "\n\n".join(issue_lines)}}
+                {"textParagraph": {"text": "\n\n".join(warn_lines)}}
             ],
         })
 

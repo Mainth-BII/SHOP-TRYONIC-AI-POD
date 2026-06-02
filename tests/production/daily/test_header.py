@@ -47,24 +47,59 @@ class TestDailyHeader(BaseDailyTest):
     _MEGA_PANEL = "[class*='backdrop-blur-xl'][class*='fixed'], [class*='shadow-xl'][class*='w-full'][class*='fixed']"
 
     def _open_dropdown(self, btn_selector: str) -> bool:
-        """Hover lên nav button → chờ mega menu panel mở."""
+        """Mở mega menu — robust trên cả headed lẫn headless CI.
+
+        Menu được mở bởi onMouseEnter trên <div> wrapper bao quanh button
+        (React tổng hợp mouseenter từ native 'mouseover' bubbles ở root).
+        Trên CI headless, hover thật đôi khi không kích hoạt → fallback
+        dispatch mouseover/mouseenter/pointerover qua JS lên button + các
+        phần tử cha (bubbles=True để React bắt được).
+        """
         self.home.navigate()
         self.page.wait_for_timeout(1_000)
         btn = self.page.locator(f"header {btn_selector}").first
         if not btn.is_visible(timeout=5_000):
             return False
-        btn.hover()
-        # Chờ mega panel xuất hiện (retry 1 lần nếu cần)
-        for _attempt in range(2):
+
+        def _panel_visible() -> bool:
             try:
-                self.page.wait_for_selector(self._MEGA_PANEL, state="visible", timeout=2_000)
+                return self.page.locator(self._MEGA_PANEL).first.is_visible(timeout=1_500)
+            except Exception:
+                return False
+
+        # 1) Thử hover thật trước (đa số trường hợp headed/CI hoạt động)
+        try:
+            btn.hover(timeout=2_000)
+        except Exception:
+            pass
+        if _panel_visible():
+            self.page.wait_for_timeout(200)
+            return True
+
+        # 2) Fallback headless: bắn native mouse events lên button + cha
+        _dispatch_js = """el => {
+            const targets = [el, el.parentElement,
+                             el.parentElement && el.parentElement.parentElement]
+                            .filter(Boolean);
+            for (const t of targets) {
+                for (const type of ['pointerover','pointerenter',
+                                    'mouseover','mouseenter','mousemove']) {
+                    t.dispatchEvent(new MouseEvent(type, {
+                        bubbles: true, cancelable: true, view: window,
+                    }));
+                }
+            }
+        }"""
+        for _attempt in range(3):
+            try:
+                btn.evaluate(_dispatch_js)
+            except Exception:
+                pass
+            self.page.wait_for_timeout(400)
+            if _panel_visible():
                 self.page.wait_for_timeout(200)
                 return True
-            except Exception:
-                if _attempt == 0:
-                    btn.hover()  # thử hover lại
-                    self.page.wait_for_timeout(600)
-        return True  # tiếp tục dù không confirm được panel
+        return _panel_visible()
 
     # ── Test ─────────────────────────────────────────────────────────────────
 

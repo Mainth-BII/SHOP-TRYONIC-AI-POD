@@ -218,30 +218,8 @@ class TestDailyDesignMultiCart(BaseDailyTest):
         print(f"  [INFO] M21 unit price: {unit2:,}đ")
 
         # ── MH10: Popup Giỏ hàng → click Thanh toán → Checkout ───────────────
-        # Bước 1: Mở popup giỏ hàng
-        cart_opened = False
-        try:
-            cart_btn = self.page.locator(
-                "[data-testid='cart-icon'], [aria-label*='cart'], "
-                "button:has-text('shopping_cart'), [class*='cart-icon']"
-            ).first
-            if cart_btn.is_visible(timeout=2_000):
-                cart_btn.click()
-                self.page.wait_for_timeout(2_000)
-                cart_opened = True
-        except Exception:
-            pass
-        if not cart_opened:
-            try:
-                cart_link = self.page.locator(
-                    "button:has-text('Giỏ hàng'), a:has-text('Giỏ hàng')"
-                ).first
-                if cart_link.is_visible(timeout=3_000):
-                    cart_link.click()
-                    self.page.wait_for_timeout(2_000)
-                    cart_opened = True
-            except Exception:
-                pass
+        # Bước 1: Mở popup giỏ hàng (robust: đúng selector + retry + JS-click)
+        cart_opened = self.checkout.open_cart_panel()
 
         # Bước 2: Screenshot popup giỏ hàng đang mở (items visible)
         self._shot(TC, "2", "cart_popup_items")

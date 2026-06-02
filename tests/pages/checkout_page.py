@@ -1327,10 +1327,59 @@ class CheckoutPage(BasePage):
             pass
         return False
 
-    def open_cart_panel(self) -> None:
-        """Mở panel giỏ hàng (icon giỏ hàng trên header)."""
-        self.page.locator("[data-testid='cart-icon'], [aria-label*='cart'], [class*='cart']").first.click()
-        self.page.wait_for_timeout(800)
+    # Panel giỏ hàng (CartDrawer): div.max-w-md.shadow-2xl chứa h2 "Giỏ hàng (N)"
+    _CART_PANEL_SEL = "[class*='max-w-md'][class*='shadow']"
+    # Nút giỏ hàng trên header: <button> chứa span material-symbol 'shopping_cart'
+    # (kèm tooltip 'Giỏ hàng'). Không có data-testid/aria-label nên dò theo text.
+    _CART_BTN_SEL = (
+        "header button:has-text('shopping_cart'), "
+        "header button:has-text('Giỏ hàng'), "
+        "button:has-text('shopping_cart')"
+    )
+
+    def _cart_panel_open(self, timeout: int = 1_500) -> bool:
+        try:
+            if self.page.locator(self._CART_PANEL_SEL).first.is_visible(timeout=timeout):
+                return True
+        except Exception:
+            pass
+        try:
+            return self.page.locator("h2:has-text('Giỏ hàng')").first.is_visible(timeout=600)
+        except Exception:
+            return False
+
+    def open_cart_panel(self) -> bool:
+        """Mở panel giỏ hàng robust (headed + CI headless). Trả về True nếu mở.
+
+        Nút giỏ hàng dùng onClick (không phải hover) nên click là đủ; nhưng
+        trên CI chậm cần: chờ header, scroll vào tầm nhìn, click thật, và
+        fallback JS-click nếu click thật bị che/trượt.
+        """
+        if self._cart_panel_open(timeout=500):
+            return True
+        btn = self.page.locator(self._CART_BTN_SEL).first
+        for _attempt in range(3):
+            try:
+                if btn.is_visible(timeout=3_000):
+                    try:
+                        btn.scroll_into_view_if_needed(timeout=2_000)
+                    except Exception:
+                        pass
+                    try:
+                        btn.click(timeout=3_000)
+                    except Exception:
+                        # Fallback: click qua JS (bỏ qua phần tử che)
+                        try:
+                            btn.evaluate("el => el.click()")
+                        except Exception:
+                            pass
+                    self.page.wait_for_timeout(1_200)
+                    if self._cart_panel_open():
+                        return True
+            except Exception:
+                pass
+            self.page.wait_for_timeout(600)
+        return self._cart_panel_open()
 
     def read_cart_panel_total(self) -> int | None:
         """Đọc tổng tiền trong panel giỏ hàng (slide-in panel, trả về int VNĐ)."""

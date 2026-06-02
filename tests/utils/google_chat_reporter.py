@@ -176,6 +176,34 @@ def _suite_display(name: str) -> str:
 
 # ── Card builder ──────────────────────────────────────────────────────────────
 
+# Google Chat giới hạn mỗi widget textParagraph ~4096 ký tự. Nếu gom nhiều dòng
+# (vd 26 cảnh báo) vào 1 widget sẽ vượt giới hạn → Google Chat từ chối cả card
+# và hiện "Webhook Bot is unable to process your request". Tách thành nhiều
+# widget, mỗi widget < _TP_LIMIT ký tự.
+_TP_LIMIT = 3800
+
+
+def _text_widgets(lines: list, sep: str = "\n\n", limit: int = _TP_LIMIT) -> list:
+    """Gom list dòng thành nhiều widget textParagraph, mỗi widget < limit ký tự."""
+    widgets: list = []
+    buf: list = []
+    buf_len = 0
+    for ln in lines:
+        ln = str(ln)
+        # 1 dòng đơn lẻ quá dài → cắt bớt để không vượt giới hạn
+        if len(ln) > limit:
+            ln = ln[: limit - 1] + "…"
+        add = len(ln) + len(sep)
+        if buf and buf_len + add > limit:
+            widgets.append({"textParagraph": {"text": sep.join(buf)}})
+            buf, buf_len = [], 0
+        buf.append(ln)
+        buf_len += add
+    if buf:
+        widgets.append({"textParagraph": {"text": sep.join(buf)}})
+    return widgets
+
+
 def _build_daily_card(
     suites: dict,
     total_duration: float = 0,
@@ -294,18 +322,14 @@ def _build_daily_card(
         sections.append({
             "header":     f"❌ Lỗi cần xử lý ({len(fail_lines)})",
             "collapsible": False,
-            "widgets": [
-                {"textParagraph": {"text": "\n\n".join(fail_lines)}}
-            ],
+            "widgets":     _text_widgets(fail_lines),
         })
 
     if warn_lines:
         sections.append({
             "header":     f"⚠️ Cảnh báo — không phải lỗi test ({len(warn_lines)})",
             "collapsible": True,
-            "widgets": [
-                {"textParagraph": {"text": "\n\n".join(warn_lines)}}
-            ],
+            "widgets":     _text_widgets(warn_lines),
         })
 
     # ── Section 4b: Screenshot cho FAIL ──────────────────────────────────────

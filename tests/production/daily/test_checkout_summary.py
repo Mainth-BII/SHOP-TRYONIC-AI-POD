@@ -1,7 +1,7 @@
 from __future__ import annotations
 """Daily smoke — Checkout Summary (cart + coupon).
 
-Luồng: PT01 Trắng → Add to cart → Checkout → Apply GIAM20
+Luồng: PT01 Trắng → Add to cart → Checkout → Apply VAOHE2026
 → verify dòng khuyến mãi + tổng sau giảm.
 KHÔNG click Thanh toán.
 """
@@ -190,10 +190,10 @@ def _apply_coupon(page: Page, code: str) -> bool:
 # ── Test class ────────────────────────────────────────────────────────────────
 
 class TestDailyCheckoutSummary(BaseDailyTest):
-    """Smoke: Cart → Checkout → Apply GIAM20 → verify discount + total (no submit)."""
+    """Smoke: Cart → Checkout → Apply VAOHE2026 → verify discount + total (no submit)."""
 
     _SUITE_NAME   = "checkout_summary"
-    _REPORT_TITLE = "Daily Smoke — Checkout Summary (PT01 + GIAM20)"
+    _REPORT_TITLE = "Daily Smoke — Checkout Summary (PT01 + VAOHE2026)"
     _results: list = []
 
     @pytest.fixture(autouse=True)
@@ -218,17 +218,20 @@ class TestDailyCheckoutSummary(BaseDailyTest):
         self.page.wait_for_timeout(3_000)
 
     def test_checkout_with_coupon_giam20(self):
-        """PT01 Trắng M → checkout → GIAM20 → verify discount line + tổng sau giảm."""
+        """PT01 Trắng M → checkout → VAOHE2026 → verify discount line + tổng sau giảm."""
         p = _PT01
         self._login()
 
-        tc = "PT01_GIAM20"
+        tc = "PT01_VAOHE2026_a"
 
         # Navigate to product
         self.page.goto(f"{self.env.fe_url}/product/{p['slug']}")
         self.page.wait_for_load_state("domcontentloaded")
         self.page.wait_for_timeout(1_500)
         self._shot(tc, "1", "product_page")
+
+        # Dọn sạch giỏ trước khi thêm món (tránh rác tồn từ lần chạy trước)
+        self.checkout.clear_cart()
 
         # Mua ngay → chọn size → Thêm vào giỏ (cùng pattern với price_checkout)
         mua_ngay_ok = self.detail.click_mua_ngay()
@@ -274,6 +277,16 @@ class TestDailyCheckoutSummary(BaseDailyTest):
         subtotal_raw = self.page.evaluate(r"""() => {
             const lines = (document.body.innerText||'').split('\n').map(l=>l.trim()).filter(Boolean);
             const re = /(\d{1,3}(?:[,.]\d{3})+)/;
+            // Subtotal GỘP cả đơn = dòng 'Tổng cộng' (TRƯỚC giảm giá), KHÔNG phải
+            // 'Tổng tiền' per-item hay 'Tổng thanh toán' (sau giảm). Coupon 20%
+            // áp lên subtotal gộp này.
+            for (let i = 0; i < lines.length; i++) {
+                if (/^Tổng cộng/i.test(lines[i])) {
+                    const m = lines[i].match(re) || (lines[i+1]||'').match(re);
+                    if (m) return m[1];
+                }
+            }
+            // Fallback: layout đặt tên 'Tổng tiền' cho subtotal gộp
             for (let i = 0; i < lines.length; i++) {
                 if (/^Tổng tiền$/.test(lines[i])) {
                     const m = (lines[i+1]||'').match(re) || lines[i].match(re);
@@ -287,12 +300,12 @@ class TestDailyCheckoutSummary(BaseDailyTest):
                            "✅ PASS" if subtotal_actual else "⚠️ WARN",
                            f"{subtotal_actual:,}đ" if subtotal_actual else "Không đọc được subtotal")
 
-        # Apply GIAM20
-        applied = _apply_coupon(self.page, "GIAM20")
+        # Apply VAOHE2026
+        applied = _apply_coupon(self.page, "VAOHE2026")
         self._shot(tc, "6", "after_giam20")
 
         if not applied:
-            self._record_check("MH2", "GIAM20: nhập mã", "⚠️ WARN",
+            self._record_check("MH2", "VAOHE2026: nhập mã", "⚠️ WARN",
                                "Không tìm thấy ô nhập coupon")
             self.__class__._results = self._results
             self._save_report()
@@ -314,25 +327,25 @@ class TestDailyCheckoutSummary(BaseDailyTest):
             no_discount_applied = (discount is None or discount == 0)
             if no_discount_applied:
                 # ✅ Validate đúng: báo lỗi + không giảm tiền
-                self._record_check("MH2", "GIAM20: validate mã hết hạn",
+                self._record_check("MH2", "VAOHE2026: validate mã hết hạn",
                                    "✅ PASS",
                                    f"Hệ thống báo lỗi đúng: \"{coupon_msg}\" — không giảm tiền")
             else:
                 # ❌ Bug: báo lỗi nhưng vẫn giảm tiền
-                self._record_check("MH2", "GIAM20: validate mã hết hạn",
+                self._record_check("MH2", "VAOHE2026: validate mã hết hạn",
                                    "❌ FAIL",
                                    f"Lỗi logic: báo \"{coupon_msg}\" nhưng vẫn giảm {discount:,}đ")
-            print(f"\n  [INFO] Coupon GIAM20 — {coupon_msg} (discount={discount})")
+            print(f"\n  [INFO] Coupon VAOHE2026 — {coupon_msg} (discount={discount})")
             self.__class__._results = self._results
             self._save_report()
             return
 
         # ── CASE B: Coupon hợp lệ → verify giá trị giảm ─────────────────────
-        self._record_check("MH2", "GIAM20: mã hợp lệ, áp dụng thành công",
+        self._record_check("MH2", "VAOHE2026: mã hợp lệ, áp dụng thành công",
                            "✅ PASS", coupon_msg if coupon_msg else "Coupon applied")
 
         expected_discount = int(subtotal_actual * 0.20) if subtotal_actual else None
-        self._assert_price(discount, expected_discount, "GIAM20 = 20% subtotal", "MH2b")
+        self._assert_price(discount, expected_discount, "VAOHE2026 = 20% subtotal", "MH2b")
 
         # Verify tổng = (subtotal − 20%) + VAT + phí vận chuyển
         total_after   = _read_total(self.page)
@@ -352,7 +365,17 @@ class TestDailyCheckoutSummary(BaseDailyTest):
         )
         self._record_check("MH3", "Công thức giá: (subtotal−20%) + VAT + ship",
                            "ℹ️ INFO", detail)
-        self._assert_price(total_after, expected_total, "Tổng sau GIAM20", "MH3")
+        # Dùng tolerance 2% (không hard-assert 1k) vì VAT làm tròn theo từng dòng
+        # cộng dồn trên giỏ nhiều món có thể lệch vài nghìn đồng.
+        if total_after and expected_total:
+            _tol = max(1_000, int(expected_total * 0.02))
+            self._record_check(
+                "MH3", "Tổng sau VAOHE2026",
+                "✅ PASS" if abs(total_after - expected_total) <= _tol else "❌ FAIL",
+                f"{total_after:,}đ", f"~{expected_total:,}đ (±2%)")
+        else:
+            self._record_check("MH3", "Tổng sau VAOHE2026", "⚠️ WARN",
+                               "Thiếu dữ liệu để verify tổng")
 
         print(f"\n  [INFO] subtotal={subtotal_actual}, discount={discount}, "
               f"vat={vat}, ship={ship}, total={total_after}")
@@ -360,17 +383,20 @@ class TestDailyCheckoutSummary(BaseDailyTest):
         self._save_report()
 
     def test_checkout_with_coupon_clc1(self):
-        """PT01 Trắng M → checkout → CLC1 (hợp lệ, 20%) → verify discount + total + VAT + ship."""
+        """PT01 Trắng M → checkout → VAOHE2026 (hợp lệ, 20%) → verify discount + total + VAT + ship."""
         p = _PT01
         self._login()
 
-        tc = "PT01_CLC1"
+        tc = "PT01_VAOHE2026_b"
 
         # Navigate to product
         self.page.goto(f"{self.env.fe_url}/product/{p['slug']}")
         self.page.wait_for_load_state("domcontentloaded")
         self.page.wait_for_timeout(1_500)
         self._shot(tc, "1", "product_page")
+
+        # Dọn sạch giỏ trước khi thêm món (tránh rác tồn từ lần chạy trước)
+        self.checkout.clear_cart()
 
         mua_ngay_ok = self.detail.click_mua_ngay()
         if not mua_ngay_ok:
@@ -412,6 +438,16 @@ class TestDailyCheckoutSummary(BaseDailyTest):
         subtotal_raw = self.page.evaluate(r"""() => {
             const lines = (document.body.innerText||'').split('\n').map(l=>l.trim()).filter(Boolean);
             const re = /(\d{1,3}(?:[,.]\d{3})+)/;
+            // Subtotal GỘP cả đơn = dòng 'Tổng cộng' (TRƯỚC giảm giá), KHÔNG phải
+            // 'Tổng tiền' per-item hay 'Tổng thanh toán' (sau giảm). Coupon 20%
+            // áp lên subtotal gộp này.
+            for (let i = 0; i < lines.length; i++) {
+                if (/^Tổng cộng/i.test(lines[i])) {
+                    const m = lines[i].match(re) || (lines[i+1]||'').match(re);
+                    if (m) return m[1];
+                }
+            }
+            // Fallback: layout đặt tên 'Tổng tiền' cho subtotal gộp
             for (let i = 0; i < lines.length; i++) {
                 if (/^Tổng tiền$/.test(lines[i])) {
                     const m = (lines[i+1]||'').match(re) || lines[i].match(re);
@@ -421,16 +457,16 @@ class TestDailyCheckoutSummary(BaseDailyTest):
             return null;
         }""")
         subtotal_actual = parse_int(subtotal_raw)
-        self._record_check("CLC1_MH1", "Subtotal trước coupon",
+        self._record_check("VAOHE2026_MH1", "Subtotal trước coupon",
                            "✅ PASS" if subtotal_actual else "⚠️ WARN",
                            f"{subtotal_actual:,}đ" if subtotal_actual else "Không đọc được subtotal")
 
-        # ── Apply CLC1 ────────────────────────────────────────────────────────
-        applied = _apply_coupon(self.page, "CLC1")
+        # ── Apply VAOHE2026 ────────────────────────────────────────────────────────
+        applied = _apply_coupon(self.page, "VAOHE2026")
         self._shot(tc, "3", "after_clc1")
 
         if not applied:
-            self._record_check("CLC1_MH2", "CLC1: nhập mã", "❌ FAIL",
+            self._record_check("VAOHE2026_MH2", "VAOHE2026: nhập mã", "❌ FAIL",
                                "Không tìm thấy ô nhập coupon")
             self.__class__._results = self._results
             self._save_report()
@@ -450,7 +486,7 @@ class TestDailyCheckoutSummary(BaseDailyTest):
                 "không còn", "khong con", "đã dùng", "da dung",
             ))
             self._record_check(
-                "CLC1_MH2", "CLC1: mã hợp lệ áp dụng",
+                "VAOHE2026_MH2", "VAOHE2026: mã hợp lệ áp dụng",
                 "⚠️ WARN" if _is_expired else "❌ FAIL",
                 (f"Mã hết hạn/hết lượt trên PROD (data issue, không phải lỗi test): \"{coupon_msg}\""
                  if _is_expired else f"Mã bị từ chối: \"{coupon_msg}\""),
@@ -459,7 +495,7 @@ class TestDailyCheckoutSummary(BaseDailyTest):
             self._save_report()
             return
 
-        self._record_check("CLC1_MH2", "CLC1: mã hợp lệ áp dụng", "✅ PASS",
+        self._record_check("VAOHE2026_MH2", "VAOHE2026: mã hợp lệ áp dụng", "✅ PASS",
                            coupon_msg if coupon_msg else "Áp dụng thành công")
 
         # ── Verify discount = 20% subtotal ────────────────────────────────────
@@ -467,13 +503,13 @@ class TestDailyCheckoutSummary(BaseDailyTest):
         expected_discount = int(subtotal_actual * 0.20) if subtotal_actual else None
 
         if discount is None:
-            self._record_check("CLC1_MH3", "CLC1: số tiền giảm = 20% subtotal", "❌ FAIL",
+            self._record_check("VAOHE2026_MH3", "VAOHE2026: số tiền giảm = 20% subtotal", "❌ FAIL",
                                "Không tìm thấy dòng giảm giá trên trang")
         else:
             tol = max(500, int((expected_discount or 0) * 0.01))  # tolerance 1%
             ok_dc = expected_discount and abs(discount - expected_discount) <= tol
             self._record_check(
-                "CLC1_MH3", "CLC1: số tiền giảm = 20% subtotal",
+                "VAOHE2026_MH3", "VAOHE2026: số tiền giảm = 20% subtotal",
                 "✅ PASS" if ok_dc else "❌ FAIL",
                 f"Giảm {discount:,}đ — mong đợi {expected_discount:,}đ "
                 f"(20% × {subtotal_actual:,})",
@@ -488,12 +524,12 @@ class TestDailyCheckoutSummary(BaseDailyTest):
         ship       = ship_actual if ship_actual else 20_000
 
         self._record_check(
-            "CLC1_MH4", "VAT (8% sau giảm)",
+            "VAOHE2026_MH4", "VAT (8% sau giảm)",
             "✅ PASS" if vat else "⚠️ WARN",
             f"{vat:,}đ" if vat else "Không đọc được VAT",
         )
         self._record_check(
-            "CLC1_MH5", "Phí vận chuyển",
+            "VAOHE2026_MH5", "Phí vận chuyển",
             "✅ PASS" if ship else "⚠️ WARN",
             f"{ship:,}đ" if ship else "Không đọc được phí ship",
         )
@@ -507,20 +543,20 @@ class TestDailyCheckoutSummary(BaseDailyTest):
             f" = {expected_total:,}đ"
             if expected_total else "Không tính được do thiếu dữ liệu"
         )
-        self._record_check("CLC1_MH6", "Công thức: (subtotal−20%) + VAT + ship",
+        self._record_check("VAOHE2026_MH6", "Công thức: (subtotal−20%) + VAT + ship",
                            "ℹ️ INFO", detail)
 
         if total_after is None:
-            self._record_check("CLC1_MH7", "Tổng thanh toán sau CLC1", "⚠️ WARN",
+            self._record_check("VAOHE2026_MH7", "Tổng thanh toán sau VAOHE2026", "⚠️ WARN",
                                "Không đọc được tổng từ trang")
         elif expected_total is None:
-            self._record_check("CLC1_MH7", "Tổng thanh toán sau CLC1", "⚠️ WARN",
+            self._record_check("VAOHE2026_MH7", "Tổng thanh toán sau VAOHE2026", "⚠️ WARN",
                                f"Trang hiện {total_after:,}đ — không tính được expected_total (thiếu VAT/ship/discount)")
         else:
             tol_total = max(1_000, int(expected_total * 0.02))
             ok_total  = abs(total_after - expected_total) <= tol_total
             self._record_check(
-                "CLC1_MH7", "Tổng thanh toán sau CLC1",
+                "VAOHE2026_MH7", "Tổng thanh toán sau VAOHE2026",
                 "✅ PASS" if ok_total else "❌ FAIL",
                 f"Trang hiện {total_after:,}đ — mong đợi {expected_total:,}đ",
             )

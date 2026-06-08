@@ -1,7 +1,7 @@
 """Daily smoke — Design BuyNow (PT01).
 
 Luồng: Login → Listing → Product Detail → Studio (Library) → Review → Order popup →
-       Checkout. Dừng ở MH5 checkout — verify giá, apply GIAM20, KHÔNG click Thanh toán.
+       Checkout. Dừng ở MH5 checkout — verify giá, apply VAOHE2026, KHÔNG click Thanh toán.
 """
 from __future__ import annotations
 
@@ -20,7 +20,11 @@ _ORIGINAL    = 227_000
 _LIST_SALE   = 189_000
 _SHIPPING    = 20_000
 _VAT_RATE    = 0.08
-_GIAM20_RATE = 0.20
+# Coupon verify — VAOHE2026: giảm 20% trên TOÀN BỘ subtotal (ALL_ITEMS),
+# đơn tối thiểu 100.000đ, không giới hạn mức giảm (cap=0), HSD 31/12/2026, public.
+_COUPON_CODE = "VAOHE2026"
+_COUPON_RATE = 0.20
+_COUPON_MIN  = 100_000
 
 TC = "pt01_buynow"
 
@@ -279,27 +283,37 @@ class TestDailyDesignBuynow(BaseDailyTest):
         self._assert_price(shipping, expected_ship, "MH5 Phí giao hàng",    mh="MH5")
         self._assert_price(total,    expected_tot,  "MH5 Tổng thanh toán",  mh="MH5")
 
-        # Apply GIAM20 (apply_discount_code đã poll xác nhận áp dụng thành công)
-        applied = self.checkout.apply_discount_code("GIAM20")
-        self._shot(TC, "10", "giam20_applied")
+        # Apply VAOHE2026 — giảm 20% áp lên SUBTOTAL (ALL_ITEMS), đơn tối thiểu 100k
+        applied = self.checkout.apply_discount_code(_COUPON_CODE)
+        self._shot(TC, "10", "coupon_applied")
 
         discount = self.checkout.read_checkout_discount()
         total_after = self.checkout.read_checkout_total()
-        expected_discount = int((unit if unit > 0 else _SALE_AO) * _GIAM20_RATE)
-        print(f"  [INFO] GIAM20: applied={applied}, discount={discount}, "
-              f"total_after={total_after}, expected_discount={expected_discount:,}đ")
+        # 20% áp lên subtotal thực của checkout (gồm cả phí in), không phải unit popup.
+        _ref_sub = subtotal if subtotal else (unit if unit > 0 else _SALE_AO)
+        expected_discount = (int(_ref_sub * _COUPON_RATE)
+                             if _ref_sub >= _COUPON_MIN else 0)
+        print(f"  [INFO] {_COUPON_CODE}: applied={applied}, discount={discount}, "
+              f"total_after={total_after}, expected_discount={expected_discount:,}đ "
+              f"(20% × subtotal {_ref_sub:,})")
 
-        self._record_check("MH5", "Apply GIAM20",
+        self._record_check("MH5", f"Apply {_COUPON_CODE}",
                            "✅ PASS" if applied else "⚠️ WARN",
                            f"applied={applied}")
         # Chỉ hard-assert khi đã xác nhận apply VÀ đọc được số giảm (tránh fail
         # oan khi mã lỗi data/PROD — đó là WARN, không phải lỗi test code).
         if applied and discount:
-            self._assert_price(discount, expected_discount, "MH5 GIAM20 discount amount",
-                               mh="MH5")
+            self._assert_price(discount, expected_discount,
+                               f"MH5 {_COUPON_CODE} discount = 20% subtotal", mh="MH5")
+            # Verify tổng sau giảm: (subtotal − discount) + VAT(8% sau giảm) + ship
+            if total_after and subtotal:
+                _after = subtotal - discount
+                self._assert_price(total_after,
+                                   _after + int(_after * _VAT_RATE) + _SHIPPING,
+                                   f"MH5 Tổng sau {_COUPON_CODE}", mh="MH5")
         else:
             _reason = self.checkout.last_promo_message or "không rõ lý do"
-            self._record_check("MH5", "GIAM20 discount line", "⚠️ WARN",
+            self._record_check("MH5", f"{_COUPON_CODE} discount line", "⚠️ WARN",
                                f"applied={applied}, discount={discount} — lý do BE: "
                                f"\"{_reason}\" (data/PROD, không phải lỗi test)",
                                f"expected ~{expected_discount:,}đ")

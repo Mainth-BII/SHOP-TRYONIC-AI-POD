@@ -573,15 +573,17 @@ class CheckoutPage(BasePage):
 
     def _read_price_label(self, label: str) -> int | None:
         """Đọc giá trên dòng có label cho trước (regex: label → số tiền).
-        Chỉ match số có 4+ chữ số hoặc định dạng thousands (x,xxx / x.xxx)
-        để tránh match số ngắn trong mã khuyến mãi (vd: GIAM20 → "20")."""
+        CHỈ match số định dạng thousands (x.xxx / x,xxx) HOẶC số liền hậu tố đ/₫,
+        để tránh vớ nhầm chữ số trong TÊN MÃ khuyến mãi (vd GIAM20 → '20',
+        VAOHE2026 → '2026'). Số tiền thật luôn có dấu phân cách nghìn hoặc đ."""
         import re
         try:
             raw = self.page.evaluate(f"""() => {{
                 const text = document.body.innerText || '';
                 const lines = text.split('\\n').map(l => l.trim()).filter(Boolean);
-                // Regex chỉ match số thousands-formatted hoặc 4+ chữ số
-                const priceRe = /(-?\\d{{1,3}}(?:[,.]\\d{{3}})+|-?\\d{{4,}})\\s*[đ₫]?/;
+                // Thousands-formatted, HOẶC chuỗi số liền ngay trước đ/₫ (lookahead).
+                // Loại bỏ số trần trong tên mã (vd '2026' trong 'VAOHE2026').
+                const priceRe = /(-?\\d{{1,3}}(?:[.,]\\d{{3}})+|-?\\d+(?=\\s*[đ₫]))/;
                 for (let i = 0; i < lines.length; i++) {{
                     if (lines[i].includes('{label}')) {{
                         let m = lines[i].match(priceRe);
@@ -1472,6 +1474,88 @@ class CheckoutPage(BasePage):
                 pass
             self.page.wait_for_timeout(600)
         return self._cart_panel_open()
+
+    def clear_cart(self, max_items: int = 40) -> int:
+        """Dọn sạch giỏ trước khi test thêm món (tránh rác tồn từ lần chạy trước).
+
+        Mở panel giỏ → click lần lượt nút 'Xóa sản phẩm' (Trash2) đến khi hết.
+        KHÔNG đụng tới Thanh toán. Trả về số món đã xóa. An toàn khi giỏ trống.
+        """
+        _DEL_SEL = (
+            "button[title='Xóa sản phẩm'], "
+            "button[title*='Xóa'], "
+            "button:has(svg.lucide-trash-2), "
+            "button:has(svg[class*='trash'])"
+        )
+        removed = 0
+        # FORCE click nút giỏ để mở drawer THẬT — KHÔNG dùng open_cart_panel()
+        # vì _cart_panel_open có thể false-positive trên trang Đặt hàng (có nút
+        # 'Thanh toán'/'Giỏ hàng') khiến drawer không thực sự mở → không thấy
+        # nút xóa → dọn hụt. Mở drawer xong mới có nút Trash để xóa.
+        try:
+            btn = self.page.locator(self._CART_BTN_SEL).first
+            if btn.is_visible(timeout=3_000):
+                try:
+                    btn.scroll_into_view_if_needed(timeout=1_500)
+                except Exception:
+                    pass
+                try:
+                    btn.click(timeout=3_000)
+                except Exception:
+                    try:
+                        btn.evaluate("el => el.click()")
+                    except Exception:
+                        pass
+                self.page.wait_for_timeout(1_200)
+        except Exception:
+            pass
+        # Chờ drawer render nút xóa (tối đa ~3s) trước khi bắt đầu dọn
+        for _ in range(6):
+            try:
+                if self.page.locator(_DEL_SEL).count() > 0:
+                    break
+            except Exception:
+                pass
+            self.page.wait_for_timeout(500)
+        for _ in range(max_items):
+            try:
+                btns = self.page.locator(_DEL_SEL)
+                if btns.count() == 0:
+                    break
+                try:
+                    btns.first.click(timeout=2_000)
+                except Exception:
+                    try:
+                        btns.first.evaluate("el => el.click()")
+                    except Exception:
+                        break
+                removed += 1
+                self.page.wait_for_timeout(700)
+            except Exception:
+                break
+        # Đóng drawer để overlay không che các thao tác sau (Mua ngay/Thêm giỏ)
+        self._close_cart_panel()
+        return removed
+
+    def _close_cart_panel(self) -> None:
+        """Đóng drawer giỏ hàng (nút X trong panel, fallback Escape)."""
+        try:
+            close_btn = self.page.locator(
+                "[class*='max-w-md'] button:has(svg.lucide-x), "
+                "[class*='max-w-md'][class*='shadow'] button:has(svg.lucide-x)"
+            ).first
+            if close_btn.is_visible(timeout=1_500):
+                close_btn.click(timeout=2_000)
+                self.page.wait_for_timeout(500)
+        except Exception:
+            pass
+        # Fallback: nếu vẫn mở → Escape
+        try:
+            if self._cart_panel_open(timeout=500):
+                self.page.keyboard.press("Escape")
+                self.page.wait_for_timeout(400)
+        except Exception:
+            pass
 
     def read_cart_panel_total(self, retries: int = 4, wait_ms: int = 800) -> int | None:
         """Đọc 'Tổng tiền (N thiết kế)' trong panel giỏ hàng (trả về int VNĐ).

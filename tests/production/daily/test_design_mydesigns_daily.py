@@ -18,7 +18,11 @@ _SALE_AO_TRANG = 189_000   # PT01 Trắng
 _ORIGINAL      = 227_000
 _SHIPPING      = 20_000
 _VAT_RATE      = 0.08
-_GIAM20_RATE   = 0.20
+# Coupon verify — VAOHE2026: giảm 20% trên TOÀN BỘ subtotal (ALL_ITEMS),
+# đơn tối thiểu 100.000đ, không giới hạn mức giảm (cap=0), HSD 31/12/2026, public.
+_COUPON_CODE   = "VAOHE2026"
+_COUPON_RATE   = 0.20
+_COUPON_MIN    = 100_000
 
 TC = "pt01_mydesigns"
 
@@ -111,7 +115,7 @@ class TestDailyDesignMydesigns(BaseDailyTest):
     def _studio_fallback(self):
         """FALLBACK: Tạo thiết kế mới từ studio khi my-designs không dùng được."""
         self._record_check("MH_MY1", "FALLBACK: vào Studio tạo mới",
-                           "⚠️ WARN", "redirect sang Studio", "/terms hoặc không có design")
+                           "ℹ️ INFO", "tài khoản chưa có thiết kế lưu → chạy nhánh tạo mới (vẫn cover flow)")
 
         self.detail.navigate("ao-phong-ca-tinh")
         self.page.wait_for_timeout(1_000)
@@ -164,8 +168,8 @@ class TestDailyDesignMydesigns(BaseDailyTest):
 
         # Kiểm tra nếu redirect sang /terms
         if "/terms" in self.page.url:
-            self._record_check("MH_MY1", "Redirect sang /terms", "⚠️ WARN",
-                               self.page.url, "cần chấp nhận điều khoản")
+            self._record_check("MH_MY1", "Redirect sang /terms", "ℹ️ INFO",
+                               self.page.url, "chưa có thiết kế lưu → nhánh tạo mới")
             self._studio_fallback()
         else:
             # Thử các cách lấy URL thiết kế để dùng lại
@@ -185,7 +189,7 @@ class TestDailyDesignMydesigns(BaseDailyTest):
                     # Nếu redirect sang /terms sau click
                     if "/terms" in self.page.url:
                         self._record_check("MH_MY1", "Click Sử dụng → /terms redirect",
-                                           "⚠️ WARN", self.page.url)
+                                           "ℹ️ INFO", self.page.url)
                         self._studio_fallback()
                     elif "studio" in self.page.url:
                         used_design = True
@@ -220,7 +224,7 @@ class TestDailyDesignMydesigns(BaseDailyTest):
                 else:
                     # FALLBACK hoàn toàn
                     self._record_check("MH_MY1", "Không tìm thấy design để dùng lại",
-                                       "⚠️ WARN", "fallback sang Studio mới")
+                                       "ℹ️ INFO", "fallback sang Studio mới (chưa có thiết kế lưu)")
                     self._studio_fallback()
 
             # Nếu đã vào studio từ my-designs, accept terms và proceed
@@ -350,7 +354,7 @@ class TestDailyDesignMydesigns(BaseDailyTest):
             self._assert_price(shipping, _SHIPPING, "MH5 Phí giao hàng", mh="MH5")
             self._assert_price(total, subtotal + int(subtotal * _VAT_RATE) + _SHIPPING,
                                "MH5 Tổng thanh toán (theo subtotal thực)", mh="MH5")
-            unit = subtotal   # dùng cho tính discount GIAM20 bên dưới
+            unit = subtotal   # dùng cho tính discount VAOHE2026 bên dưới
         else:
             self._record_check("MH5", "Đọc giá checkout", "⚠️ WARN",
                                "Không đọc được subtotal", "kiểm tra lại UI checkout")
@@ -358,26 +362,36 @@ class TestDailyDesignMydesigns(BaseDailyTest):
         # Chuẩn để tính discount: ưu tiên unit tin cậy, fallback subtotal thực
         expected_sub = unit if unit >= _SALE_AO_TRANG else (subtotal or _SALE_AO_TRANG)
 
-        # Apply GIAM20
-        applied = self.checkout.apply_discount_code("GIAM20")
+        # Apply VAOHE2026 — giảm 20% áp lên SUBTOTAL (ALL_ITEMS), đơn tối thiểu 100k
+        applied = self.checkout.apply_discount_code(_COUPON_CODE)
         self.page.wait_for_timeout(2_000)
-        self._shot(TC, "10", "giam20_applied")
+        self._shot(TC, "10", "coupon_applied")
 
         discount = self.checkout.read_checkout_discount()
         total_after = self.checkout.read_checkout_total()
-        expected_discount = int(expected_sub * _GIAM20_RATE)
-        print(f"  [INFO] GIAM20: applied={applied}, discount={discount}, "
-              f"total_after={total_after}, expected_discount={expected_discount:,}đ")
+        expected_discount = (int(expected_sub * _COUPON_RATE)
+                             if expected_sub >= _COUPON_MIN else 0)
+        print(f"  [INFO] {_COUPON_CODE}: applied={applied}, discount={discount}, "
+              f"total_after={total_after}, expected_discount={expected_discount:,}đ "
+              f"(20% × subtotal {expected_sub:,})")
 
-        self._record_check("MH5", "Apply GIAM20",
+        self._record_check("MH5", f"Apply {_COUPON_CODE}",
                            "✅ PASS" if applied else "⚠️ WARN",
                            f"applied={applied}")
-        if discount:
+        if applied and discount:
             self._assert_price(discount, expected_discount,
-                               "MH5 GIAM20 discount amount", mh="MH5")
+                               f"MH5 {_COUPON_CODE} discount = 20% subtotal", mh="MH5")
+            # Verify tổng sau giảm: (subtotal − discount) + VAT(8% sau giảm) + ship
+            if total_after and subtotal:
+                _after = subtotal - discount
+                self._assert_price(total_after,
+                                   _after + int(_after * _VAT_RATE) + _SHIPPING,
+                                   f"MH5 Tổng sau {_COUPON_CODE}", mh="MH5")
         else:
-            self._record_check("MH5", "GIAM20 discount line", "⚠️ WARN",
-                               "Không đọc được discount",
+            _reason = self.checkout.last_promo_message or "không rõ lý do"
+            self._record_check("MH5", f"{_COUPON_CODE} discount line", "⚠️ WARN",
+                               f"applied={applied}, discount={discount} — lý do BE: "
+                               f"\"{_reason}\" (data/PROD, không phải lỗi test)",
                                f"expected ~{expected_discount:,}đ")
 
         # ── PROD SAFETY STOP ──────────────────────────────────────────────────

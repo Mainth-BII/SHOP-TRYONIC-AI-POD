@@ -1,0 +1,74 @@
+name: Tryonic AI — E2E Full Flow (TEST env)
+
+# Tách HOÀN TOÀN với daily-tests.yml (PROD). Workflow này LUÔN chạy --env=test
+# và đi hết flow (đặt đơn + thanh toán sandbox). Không bao giờ chạm PROD.
+
+on:
+  # Chạy tay khi cần
+  workflow_dispatch:
+
+  # Lịch riêng (khác giờ daily để không lẫn log). Mặc định tắt — bật khi sẵn sàng:
+  # schedule:
+  #   - cron: "30 1 * * *"   # 08:30 ICT hàng ngày (sau daily)
+
+jobs:
+  e2e:
+    name: E2E Full Flow — TEST env
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Install Playwright browsers
+        run: python -m playwright install --with-deps chromium
+
+      - name: Create output directories
+        run: mkdir -p reports screenshots/daily
+
+      - name: Run E2E full flow — tests/e2e/ (TEST env)
+        id: run_e2e
+        env:
+          CI: "true"
+          PYTHONPATH: ${{ github.workspace }}/tests
+          # ⚠️ LUÔN TEST — không bao giờ truyền prod ở đây
+          TEST_ENV: "test"
+          DAILY_TEST_EMAIL: ${{ secrets.DAILY_TEST_EMAIL }}
+          DAILY_TEST_PASSWORD: ${{ secrets.DAILY_TEST_PASSWORD }}
+          GOOGLE_CHAT_WEBHOOK_URL: ${{ secrets.GOOGLE_CHAT_WEBHOOK_URL_E2E }}
+          IMGBB_API_KEY: ${{ secrets.IMGBB_API_KEY }}
+        run: |
+          python -m pytest tests/e2e/ \
+            --env=test \
+            --browser chromium \
+            -v \
+            --tb=short \
+            -p no:cacheprovider \
+            --junit-xml=reports/junit-e2e.xml \
+            2>&1 | tee reports/e2e_output.txt
+        continue-on-error: true
+
+      - name: Upload artifacts (reports + screenshots)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-results
+          path: |
+            reports/
+            screenshots/
+          retention-days: 14
+
+      - name: Fail job if tests failed
+        if: steps.run_e2e.outcome == 'failure'
+        run: |
+          echo "E2E full flow có test FAIL — xem artifact e2e-results."
+          exit 1

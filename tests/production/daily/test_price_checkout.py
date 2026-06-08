@@ -184,6 +184,10 @@ class TestDailyPriceCheckout(BaseDailyTest):
         self.page.wait_for_timeout(1_500)
         self._shot(sid, "1", "product_page")
 
+        # Dọn sạch giỏ trước khi thêm món (tránh rác tồn từ lần chạy trước làm
+        # cart total != giá 1 sản phẩm). Context /product là nơi clear_cart chạy ổn.
+        self.checkout.clear_cart()
+
         mua_ngay_ok = self.detail.click_mua_ngay()
         if not mua_ngay_ok:
             pytest.skip(f"{mh}: Không mở được popup Mua ngay")

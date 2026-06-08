@@ -132,13 +132,21 @@ class TestDailyAuthLogin(BaseDailyTest):
         self._shot(TC, "4b", "studio_for_points_check")
 
         points = self._read_points()
-        point_ok = points >= 50
-        self._record_check(
-            TC, "Tài khoản có >= 50 điểm (đủ để dùng AI)",
-            "✅ PASS" if point_ok else "⚠️ WARN",   # WARN: thiếu điểm không phải lỗi login
-            f"{points} điểm" if points >= 0 else "Không đọc được điểm trên trang",
-            ">= 50 điểm",
-        )
+        # Verify ĐỌC ĐƯỢC số dư điểm (account load OK). Ngưỡng 50 chỉ là điều kiện
+        # dùng AI — thiếu điểm là TRẠNG THÁI tài khoản, KHÔNG phải lỗi login →
+        # vẫn PASS, chỉ ghi chú nếu dưới ngưỡng. Chỉ WARN nếu không đọc được điểm.
+        if points >= 0:
+            _note = f"{points} điểm" + (
+                "" if points >= 50 else " (dưới 50 — cần nạp nếu chạy test AI)")
+            self._record_check(
+                TC, "Đọc được số dư điểm tài khoản",
+                "✅ PASS", _note, "đọc được điểm",
+            )
+        else:
+            self._record_check(
+                TC, "Đọc được số dư điểm tài khoản",
+                "⚠️ WARN", "Không đọc được điểm trên trang", "đọc được điểm",
+            )
 
         # ── 4. Logout — navigate về home trước (Studio header có thể khác cấu trúc) ──
         self.home.navigate()

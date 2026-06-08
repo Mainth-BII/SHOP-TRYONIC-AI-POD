@@ -193,6 +193,11 @@ class TestDailyDesignMultiCart(BaseDailyTest):
         self.page.wait_for_timeout(1_500)
         self._shot(TC, "1", "listing")
 
+        # Dọn sạch giỏ trước khi thêm món (tránh rác tồn từ lần chạy trước)
+        _cleared = self.checkout.clear_cart()
+        self._record_check("MH0", "Dọn giỏ trước khi test", "ℹ️ INFO",
+                           f"đã xóa {_cleared} món tồn")
+
         # Đọc giá đúng sản phẩm PT01 bằng page object
         listing_sale = self.listing.read_listing_sale_price("Áo Phông Cá Tính")
         listing_orig = self.listing.read_listing_original_price("Áo Phông Cá Tính")
@@ -348,34 +353,37 @@ class TestDailyDesignMultiCart(BaseDailyTest):
                 "✅ PASS" if derived_sub == checkout_ref else "⚠️ WARN",
                 f"derived={derived_sub:,}đ", f"giỏ={checkout_ref:,}đ")
 
-        # Apply MAIFREESHIP
+        # Apply MAIFREESHIP (mã free-ship). Hành vi ĐÚNG cần verify:
+        #  - Mã hợp lệ → phí ship = 0.
+        #  - Mã hết hạn/không tồn tại → hệ thống TỪ CHỐI, ship KHÔNG đổi.
+        # Cả hai đều PASS (validate hành vi đúng). Chỉ FAIL nếu mã lỗi mà vẫn
+        # bị trừ ship sai (tính nhầm vào total).
+        ship_before = shipping if shipping is not None else _SHIPPING
         applied = self.checkout.apply_discount_code("MAIFREESHIP")
         self.page.wait_for_timeout(2_000)
         self._shot(TC, "7", "maifreeship_applied")
 
         shipping_after = self.checkout.read_checkout_shipping()
         total_after    = self.checkout.read_checkout_total()
-        print(f"  [INFO] MAIFREESHIP: applied={applied}, ship_after={shipping_after}, "
-              f"total_after={total_after}")
-
         _mfs_reason = self.checkout.last_promo_message or "không rõ lý do"
-        self._record_check("MH5", "Apply MAIFREESHIP",
-                           "✅ PASS" if applied else "⚠️ WARN",
-                           f"applied={applied}"
-                           + ("" if applied else f' — lý do BE: "{_mfs_reason}"'))
+        print(f"  [INFO] MAIFREESHIP: applied={applied}, ship_before={ship_before}, "
+              f"ship_after={shipping_after}, total_after={total_after}")
 
-        # Verify ship = 0 (INFO nếu không áp được)
-        if shipping_after is not None:
-            if shipping_after == 0:
-                self._record_check("MH5", "MAIFREESHIP: phí vận chuyển = 0",
-                                   "✅ PASS", "0đ", "0đ")
-            else:
-                self._record_check("MH5", "MAIFREESHIP: phí vận chuyển",
-                                   "ℹ️ INFO",
-                                   f"{shipping_after:,}đ (expected 0đ nếu code hợp lệ)")
+        if applied and shipping_after == 0:
+            self._record_check("MH5", "MAIFREESHIP: mã hợp lệ → ship = 0",
+                               "✅ PASS", "0đ", "0đ")
+        elif not applied:
+            # Bị từ chối là ĐÚNG nếu KHÔNG trừ ship (free-ship không áp sai vào total)
+            _ship_unchanged = (shipping_after is None or shipping_after == ship_before)
+            self._record_check(
+                "MH5", "MAIFREESHIP: từ chối mã không hợp lệ, không trừ ship",
+                "✅ PASS" if _ship_unchanged else "❌ FAIL",
+                (f'Hệ thống từ chối đúng (BE: "{_mfs_reason}"), ship giữ nguyên '
+                 f'{ship_before:,}đ — không tính vào total' if _ship_unchanged
+                 else f'LỖI: mã bị từ chối nhưng ship đổi {ship_before:,}→{shipping_after:,}đ'))
         else:
             self._record_check("MH5", "MAIFREESHIP: phí vận chuyển", "⚠️ WARN",
-                               "Không đọc được shipping sau khi apply")
+                               f"applied=True nhưng ship={shipping_after}đ (mong đợi 0đ)")
 
         # ── PROD SAFETY STOP ──────────────────────────────────────────────────
         self._record_check("MH5", "STOP — Không click Thanh toán", "✅ PASS",

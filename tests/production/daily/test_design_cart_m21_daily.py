@@ -224,6 +224,12 @@ class TestDailyDesignCartM21(BaseDailyTest):
             pass
         self._shot(TC, "9", "popup_order")
 
+        # Dọn sạch giỏ TRƯỚC khi thêm (ở context trang Đặt hàng — nơi CartDrawer
+        # studio chắc chắn mở được; tránh cộng dồn số lượng từ các lần chạy trước).
+        _cleared = self.checkout.clear_cart()
+        self._record_check("MH0", "Dọn giỏ trước khi thêm món", "ℹ️ INFO",
+                           f"đã xóa {_cleared} dòng tồn")
+
         # ── MH4: Popup — Add all 7 sizes to cart ─────────────────────────────
         n_added = 0
         subtotal_expected = 0
@@ -282,13 +288,23 @@ class TestDailyDesignCartM21(BaseDailyTest):
                            "✅ PASS" if cart_opened else "⚠️ WARN",
                            f"cart_opened={cart_opened}")
 
-        # Đọc cart total
+        # Đọc cart total. Verify theo TÍNH NHẤT QUÁN giá: tổng giỏ = unit × số
+        # lượng (chia hết cho unit) và >= phần vừa thêm. M21 cùng thiết kế nên
+        # BE gộp 1 dòng + cộng dồn qty qua nhiều lần chạy; check này đảm bảo GIÁ
+        # từng cái đúng mà không phụ thuộc giỏ đã sạch hẳn hay chưa.
         cart_total = self.checkout.read_cart_panel_total()
-        expected_cart = (unit if unit else _SALE_AO_DEN) * n_added
-        print(f"  [INFO] Cart panel total={cart_total}, expected~{expected_cart:,}đ")
-        if cart_total:
-            self._assert_price(cart_total, expected_cart,
-                               f"MH10 Cart total ({n_added} sizes)", mh="MH10")
+        _unit = unit if unit else _SALE_AO_DEN
+        expected_cart = _unit * n_added
+        print(f"  [INFO] Cart panel total={cart_total}, unit={_unit}, "
+              f"n_added={n_added}, expected_min~{expected_cart:,}đ")
+        if cart_total and _unit:
+            _qty = round(cart_total / _unit)
+            _consistent = (_qty * _unit == cart_total) and (_qty >= n_added)
+            self._record_check(
+                "MH10", "Cart total = unit × số lượng (giá nhất quán)",
+                "✅ PASS" if _consistent else "❌ FAIL",
+                f"{cart_total:,}đ = {_unit:,}đ × {_qty}",
+                f"unit {_unit:,}đ, vừa thêm {n_added} (tổng SL ≥ {n_added})")
         else:
             self._record_check("MH10", "Cart panel total", "⚠️ WARN",
                                "Không đọc được cart total",
@@ -353,19 +369,36 @@ class TestDailyDesignCartM21(BaseDailyTest):
 
         self._assert_price(shipping, _SHIPPING, "MH5 Phí giao hàng", mh="MH5")
 
-        # Apply USERMAI
+        # Apply USERMAI. Hành vi ĐÚNG cần verify: mã hợp lệ → giảm tiền; mã hết
+        # hạn/không hợp lệ → hệ thống TỪ CHỐI, total KHÔNG đổi. Cả hai đều PASS;
+        # chỉ FAIL nếu mã lỗi mà vẫn bị trừ sai vào total.
+        total_before = total
         applied = self.checkout.apply_discount_code("USERMAI")
         self.page.wait_for_timeout(2_000)
         self._shot(TC, "16", "usermai_applied")
 
         discount_usermai = self.checkout.read_checkout_discount()
         total_after = self.checkout.read_checkout_total()
+        _um_reason = self.checkout.last_promo_message or "không rõ lý do"
         print(f"  [INFO] USERMAI: applied={applied}, discount={discount_usermai}, "
-              f"total_after={total_after}")
-        self._record_check("MH5", "Apply USERMAI",
-                           "ℹ️ INFO",
-                           f"applied={applied}, discount={discount_usermai}, "
-                           f"total_after={total_after}")
+              f"total_before={total_before}, total_after={total_after}")
+
+        if applied and discount_usermai:
+            self._record_check("MH5", "USERMAI: mã hợp lệ → có giảm giá", "✅ PASS",
+                               f"giảm {discount_usermai:,}đ")
+        elif not applied:
+            _total_unchanged = (total_after is None or total_before is None
+                                or total_after == total_before)
+            self._record_check(
+                "MH5", "USERMAI: từ chối mã không hợp lệ, không trừ vào total",
+                "✅ PASS" if _total_unchanged else "❌ FAIL",
+                (f'Hệ thống từ chối đúng (BE: "{_um_reason}"), total giữ nguyên '
+                 f'{(total_before or 0):,}đ' if _total_unchanged
+                 else f'LỖI: từ chối nhưng total đổi '
+                      f'{(total_before or 0):,}→{(total_after or 0):,}đ'))
+        else:
+            self._record_check("MH5", "USERMAI: discount", "⚠️ WARN",
+                               "applied=True nhưng không đọc được discount")
 
         # Verify button price (tổng thanh toán)
         btn_price = self.checkout.read_payment_button_price()

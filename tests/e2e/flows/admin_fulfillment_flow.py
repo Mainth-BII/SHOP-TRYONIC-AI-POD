@@ -89,20 +89,20 @@ class AdminFulfillmentFlow:
             self.record("L4", "Email 'đang được in' (flow thật)", "⚠️ WARN",
                         "Chưa đẩy được Đang in qua mark-sent (lệnh in chưa READY) → chưa verify được email theo path thật")
             # Progression-only: đưa đơn sang PRINTING để test tiếp Giao/Đã giao.
-            prog = self.orders.advance_status(code, "Đang in")
+            prog = self.orders.advance_status(code, "Đang in", expect_next="Đang giao")
             shot(self.page, "adm_05b_dang_in_progression")
             self.record("L4", "[progression] → Đang in qua updateStatus (KHÔNG phải flow In thật)",
                         "ℹ️ INFO", f"clicked={prog} (path này có gửi mail nhưng admin dùng mark-sent)")
 
         # L6 — Đang giao (Orders, qua updateStatus → có email)
-        ship = self.orders.advance_status(code, "Đang giao")
+        ship = self.orders.advance_status(code, "Đang giao", expect_next="Đã giao")
         shot(self.page, "adm_06_dang_giao")
         self.record("L6", "Thao tác → Đang giao", "✅ PASS" if ship else "❌ FAIL",
                     f"clicked={ship}")
         self._email("đang được giao", "L6", label="L6_dang_giao")
 
         # L7 — Đã giao + email
-        deliv = self.orders.advance_status(code, "Đã giao")
+        deliv = self.orders.advance_status(code, "Đã giao")  # expect_next=None (delivered)
         shot(self.page, "adm_07_da_giao")
         self.record("L7", "Thao tác → Đã giao", "✅ PASS" if deliv else "❌ FAIL",
                     f"clicked={deliv}")

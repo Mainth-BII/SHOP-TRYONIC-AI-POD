@@ -26,11 +26,28 @@ class AdminOrdersPage:
             f"div[class*='row']:has-text('{code}')",
         ]
 
-    def advance_status(self, code: str, next_label: str) -> bool:
-        """Bấm '→ {next_label}' trong dòng đúng đơn → modal 'Xác nhận chuyển
-        trạng thái?' → bấm 'Xác nhận' (modal React trong trang, KHÔNG phải
-        browser dialog). Đây mới thực sự gọi updateStatus. False nếu không thấy."""
-        self.goto()
+    def _has_next_button(self, code: str, next_label: str) -> bool:
+        """Nút '→ {next_label}' còn trong dòng đơn không (đang ở /orders sẵn)."""
+        for rsel in self._row_selectors(code):
+            try:
+                b = self.page.locator(f"{rsel} button:has-text('{next_label}')").first
+                if b.is_visible(timeout=1_500):
+                    return True
+            except Exception:
+                continue
+        return False
+
+    def _row_found(self, code: str) -> bool:
+        for rsel in self._row_selectors(code):
+            try:
+                if self.page.locator(rsel).first.is_visible(timeout=1_500):
+                    return True
+            except Exception:
+                continue
+        return False
+
+    def _click_and_confirm(self, code: str, next_label: str) -> bool:
+        """Bấm '→ {next_label}' trong dòng đơn + bấm 'Xác nhận' modal."""
         clicked = False
         for rsel in self._row_selectors(code):
             try:
@@ -45,30 +62,62 @@ class AdminOrdersPage:
         if not clicked:
             return False
         self.page.wait_for_timeout(800)
-        # Modal xác nhận: 'Xác nhận chuyển trạng thái?' / 'Xác nhận hủy đơn?'
+        confirm_clicked = False
         try:
-            confirm_btn = self.page.locator(
+            cb = self.page.locator(
                 "xpath=//*[contains(text(),'Xác nhận chuyển trạng thái') "
                 "or contains(text(),'Xác nhận hủy')]"
                 "/ancestor::div[.//button[contains(.,'Xác nhận')]][1]"
                 "//button[contains(.,'Xác nhận')]"
             ).first
-            if confirm_btn.is_visible(timeout=3_000):
-                confirm_btn.click()
-                self.page.wait_for_timeout(2_500)
-                return True
+            if cb.is_visible(timeout=3_000):
+                cb.click()
+                confirm_clicked = True
         except Exception:
             pass
-        # Fallback: nút 'Xác nhận' đang hiện (của modal)
-        try:
-            b = self.page.locator("button:has-text('Xác nhận'):visible").last
-            if b.is_visible(timeout=2_000):
-                b.click()
-                self.page.wait_for_timeout(2_500)
-                return True
-        except Exception:
-            pass
-        return clicked
+        if not confirm_clicked:
+            try:
+                b = self.page.locator("button:has-text('Xác nhận'):visible").last
+                if b.is_visible(timeout=2_000):
+                    b.click()
+                    confirm_clicked = True
+            except Exception:
+                pass
+        # QUAN TRỌNG: request updateStatus CHẬM (nút hiện 'Đang xử lý...'). Phải
+        # CHỜ modal đóng (request xong) rồi mới reload — reload sớm sẽ ABORT
+        # request đang chạy → transition không lưu (nguồn flaky chính).
+        if confirm_clicked:
+            try:
+                self.page.wait_for_function(
+                    "() => !document.body.innerText.includes('Xác nhận chuyển trạng thái') "
+                    "&& !document.body.innerText.includes('Đang xử lý')",
+                    timeout=20_000,
+                )
+            except Exception:
+                pass
+            self.page.wait_for_timeout(1_200)
+        return True
+
+    def advance_status(self, code: str, next_label: str,
+                       expect_next: str | None = None, retries: int = 3) -> bool:
+        """Chuyển trạng thái + VERIFY POSITIVE: sau khi chuyển, nút trạng thái
+        KẾ TIẾP (`expect_next`) phải xuất hiện trong dòng đơn (tránh false-positive
+        khi dòng không match). Với bước cuối (delivered) expect_next=None → verify
+        dòng vẫn còn + nút '→ {next_label}' đã biến mất. Retry nếu chưa ăn."""
+        self.goto()
+        if not self._has_next_button(code, next_label):
+            return False
+        for _ in range(max(1, retries)):
+            self._click_and_confirm(code, next_label)  # đã chờ modal đóng (request xong)
+            self.page.wait_for_timeout(1_000)
+            self.goto()  # reload + verify
+            if expect_next:
+                if self._has_next_button(code, expect_next):
+                    return True  # POSITIVE: nút kế tiếp đã xuất hiện → chuyển thật
+            else:
+                if self._row_found(code) and not self._has_next_button(code, next_label):
+                    return True
+        return False
 
     def status_text(self, code: str) -> str:
         """Đọc text dòng đơn (chứa badge trạng thái) để verify."""

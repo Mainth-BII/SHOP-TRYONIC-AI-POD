@@ -53,11 +53,13 @@ class AdminPrintJobsPage:
             pass
         return False
 
-    def mark_sent_when_ready(self, retries: int = 40, wait_ms: int = 20_000) -> tuple[bool, str]:
+    def mark_sent_when_ready(self, retries: int = 3, wait_ms: int = 5_000) -> tuple[bool, str]:
         """Chờ 'Đánh dấu đã gửi' bật (mọi lệnh in READY) rồi bấm.
 
-        Export async sau confirm RẤT CHẬM trên TEST (có thể >10 phút) → poll tới
-        ~13 phút, thoát sớm ngay khi READY.
+        Export async trên TEST RẤT CHẬM (fresh order thường >13 phút) → KHÔNG
+        chờ dài inline (chờ dài làm hỏng session admin/Yopmail ở các bước sau).
+        Chỉ poll ~1 phút; nếu chưa READY → trả WARN, verify email 'đang được in'
+        được làm RIÊNG trên đơn đã READY (xem DEFECT note). Thoát sớm khi READY.
         Thúc 'Chạy lại tất cả' MỘT lần (vòng 4) nếu chưa nhúc nhích; còn lại chỉ
         'Làm mới' + chờ (tránh re-trigger export làm reset về PROCESSING). Trả (ok, msg).
         """

@@ -353,9 +353,11 @@ class TestDailyCheckoutSummary(BaseDailyTest):
         vat_actual    = _read_vat_line(self.page)
         ship_actual   = _read_shipping_line(self.page)
         vat_calc      = int(after_dc * 0.08) if after_dc else None
-        ship_default  = 20_000
-        vat           = vat_actual  if vat_actual  else vat_calc
-        ship          = ship_actual if ship_actual else ship_default
+        # SANITIZE: reader đôi khi vớ nhầm TỔNG vào dòng ship/vat (vd ship=183,296).
+        # Phí ship thực ~20k (≤50k); VAT ≤ tạm tính sau giảm. Loại giá trị phi lý.
+        ship = ship_actual if (ship_actual and 0 < ship_actual <= 50_000) else 20_000
+        vat  = (vat_actual if (vat_actual and after_dc and 0 < vat_actual <= after_dc)
+                else vat_calc)
         expected_total = (after_dc + vat + ship) if (after_dc and vat and ship) else None
 
         detail = (
@@ -520,8 +522,11 @@ class TestDailyCheckoutSummary(BaseDailyTest):
         vat_actual = _read_vat_line(self.page)
         ship_actual = _read_shipping_line(self.page)
         vat_calc   = int(after_dc * 0.08) if after_dc else None
-        vat        = vat_actual  if vat_actual  else vat_calc
-        ship       = ship_actual if ship_actual else 20_000
+        # SANITIZE: reader đôi khi vớ nhầm TỔNG vào ship/vat (vd ship=183,296).
+        # Ship thực ~20k (≤50k); VAT ≤ tạm tính sau giảm. Loại giá trị phi lý.
+        ship       = ship_actual if (ship_actual and 0 < ship_actual <= 50_000) else 20_000
+        vat        = (vat_actual if (vat_actual and after_dc and 0 < vat_actual <= after_dc)
+                      else vat_calc)
 
         self._record_check(
             "VAOHE2026_MH4", "VAT (8% sau giảm)",

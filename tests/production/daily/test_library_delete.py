@@ -232,11 +232,14 @@ class TestDailyLibraryDelete(BaseDailyTest):
             const cardRight = {coords['cardRight']};
             const cardTop   = {coords['cardTop']};
 
-            // Ưu tiên 1: button có aria-label / title liên quan đến xoá
+            // Ưu tiên 1: button có aria-label / title / icon liên quan đến xoá.
+            // Nút thực tế: <button aria-label="Xoá ảnh"><svg class="lucide-trash-2">
+            // (class button KHÔNG chứa 'trash' → phải bắt qua svg icon).
             const labelSels = [
                 'button[aria-label*="xoá" i]', 'button[aria-label*="delete" i]',
                 'button[aria-label*="xoa" i]',  'button[aria-label*="remove" i]',
                 'button[title*="xoá" i]',        'button[title*="delete" i]',
+                'button:has(svg.lucide-trash-2)', 'button:has(svg[class*="trash" i])',
                 'button[class*="delete" i]',     'button[class*="remove" i]',
                 'button[class*="trash" i]',
             ];

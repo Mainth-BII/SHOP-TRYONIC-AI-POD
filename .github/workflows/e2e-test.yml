@@ -21,6 +21,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # ── 🔒 Guard: job E2E CHỈ chạy TEST, TUYỆT ĐỐI không PROD ────────────
+      - name: Env guard (TEST only — chặn PROD)
+        run: |
+          F=.github/workflows/e2e-test.yml
+          grep -q -- "--env=test" "$F" || { echo "::error::E2E phải chạy --env=test"; exit 1; }
+          if grep -qE "\-\-env=prod|shop\.tryonic\.ai[^.]|tests/production/" "$F"; then
+            echo "::error::E2E KHÔNG được dính --env=prod / PROD URL / tests/production/"; exit 1; fi
+          echo "✅ E2E job → môi trường TEST, chỉ tests/e2e/ (đã khóa thêm ở conftest)"
+
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:

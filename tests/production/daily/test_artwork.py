@@ -108,8 +108,10 @@ class TestDailyArtwork(BaseDailyTest):
                            f"{'Đã gửi' if _input_visible else 'Không tìm thấy input'}: \"{prompt[:80]}...\"")
 
         # ── S4: Chờ AI trả về ≥ 1 ảnh mới ───────────────────────────────────
+        # Timeout 240s: AI service PROD đôi khi chậm (~180s) → tránh false-FAIL
+        # khi ảnh thực tế CÓ tạo nhưng tới sát/quá ngưỡng cũ.
         ok, elapsed, total, new_count = self.studio.wait_for_new_artworks(
-            baseline=baseline, min_new=1, timeout=180
+            baseline=baseline, min_new=1, timeout=240
         )
         self._shot(TC, "3", f"artwork_result_{new_count}imgs_{elapsed}s")
 

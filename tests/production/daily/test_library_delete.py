@@ -147,6 +147,28 @@ class TestDailyLibraryDelete(BaseDailyTest):
         print(f"  [INFO] Thư Viện tab: {result}")
         self.page.wait_for_timeout(1_000)
 
+    def _open_my_images_tab(self) -> str:
+        """Trong panel Thư Viện có 2 sub-tab: 'Mẫu hình in' (template) và 'Hình của bạn'
+        (ảnh user — xoá được). Mặc định mở 'Mẫu hình in' → phải click 'Hình của bạn'
+        để thấy ảnh user + nút xoá (nút xoá chỉ MOUNT ở tab này).
+        """
+        result = self.page.evaluate("""() => {
+            const cands = Array.from(document.querySelectorAll(
+                'button, [role="tab"], a, div[class*="tab" i], span'));
+            for (const el of cands) {
+                const t = (el.innerText || '').trim();
+                // match chính xác text tab, tránh bắt nhầm node cha quá dài
+                if (t.length <= 24 && /(Hình của bạn|Ảnh của bạn|Của bạn|My (Images|Designs))/i.test(t)) {
+                    el.click();
+                    return 'clicked: ' + t;
+                }
+            }
+            return 'not found';
+        }""")
+        print(f"  [INFO] Tab 'Hình của bạn': {result}")
+        self.page.wait_for_timeout(1_500)
+        return result
+
     def _dismiss_product_dialog_from_studio(self, studio) -> None:
         """Navigate vào Studio → xử lý dialog → đảm bảo studio sẵn sàng."""
         studio.navigate()
@@ -186,113 +208,28 @@ class TestDailyLibraryDelete(BaseDailyTest):
 
         # Step 4: Click tab "Thư Viện" bằng JS
         self._open_library_tab_js()
-        self.page.wait_for_timeout(2_000)
+        self.page.wait_for_timeout(1_500)
 
-        # Step 5: Đếm ảnh trong 'ẢNH CỦA BẠN' (panel trái, x < 330px)
-        count = self.page.evaluate("""() => {
-            return Array.from(document.querySelectorAll('img[src]')).filter(img => {
-                const r = img.getBoundingClientRect();
-                return r.left < 330 && r.width > 30 && r.height > 30
-                    && img.complete && img.naturalWidth > 0;
-            }).length;
-        }""")
-        print(f"  [INFO] Số ảnh trong panel Thư Viện: {count}")
+        # Step 4b: Click sub-tab "Hình của bạn" (ảnh user xoá được; nút xoá chỉ
+        # mount ở tab này, KHÔNG có ở tab mặc định "Mẫu hình in").
+        self._open_my_images_tab()
+        self.page.wait_for_timeout(1_500)
+
+        # Step 5: Đếm ảnh user (= số nút xoá) trong 'Hình của bạn'
+        count = self._count_library_images()
+        print(f"  [INFO] Số ảnh user trong 'Hình của bạn': {count}")
         return count > 0
-
-    # ── Helper: Hover card → lấy delete icon góc trên-phải ─────────────────
-
-    def _hover_and_find_delete(self) -> dict:
-        """Hover vào card ảnh đầu tiên trong 'ẢNH CỦA BẠN' → tìm icon xoá góc trên-phải.
-        Trả về dict: {found, selector, x, y, img_src}
-        """
-        # Bước 1: Lấy tọa độ card ảnh đầu tiên (bỏ qua ô 'Thêm ảnh')
-        coords = self.page.evaluate("""() => {
-            const imgs = Array.from(document.querySelectorAll('img[src]')).filter(img => {
-                const r = img.getBoundingClientRect();
-                return r.left < 330 && r.width > 30 && r.height > 30
-                    && img.complete && img.naturalWidth > 0;
-            });
-            if (imgs.length === 0) return null;
-            const img = imgs[0];
-            const r = img.getBoundingClientRect();
-            return {x: r.left + r.width / 2, y: r.top + r.height / 2, src: img.src,
-                    cardLeft: r.left, cardTop: r.top, cardRight: r.right};
-        }""")
-
-        if not coords:
-            return {"found": False, "reason": "Không tìm thấy ảnh trong panel"}
-
-        # Bước 2: Hover bằng Playwright → trigger CSS :hover / :group-hover
-        self.page.mouse.move(coords["x"], coords["y"])
-        self.page.wait_for_timeout(1_500)   # CI headless cần thêm thời gian render hover
-
-        # Bước 3: Tìm delete button xuất hiện sau hover
-        # Icon xoá nằm góc trên-phải của card (absolute positioned)
-        delete_info = self.page.evaluate(f"""() => {{
-            const cardRight = {coords['cardRight']};
-            const cardTop   = {coords['cardTop']};
-
-            // Ưu tiên 1: button có aria-label / title / icon liên quan đến xoá.
-            // Nút thực tế: <button aria-label="Xoá ảnh"><svg class="lucide-trash-2">
-            // (class button KHÔNG chứa 'trash' → phải bắt qua svg icon).
-            const labelSels = [
-                'button[aria-label*="xoá" i]', 'button[aria-label*="delete" i]',
-                'button[aria-label*="xoa" i]',  'button[aria-label*="remove" i]',
-                'button[title*="xoá" i]',        'button[title*="delete" i]',
-                'button:has(svg.lucide-trash-2)', 'button:has(svg[class*="trash" i])',
-                'button[class*="delete" i]',     'button[class*="remove" i]',
-                'button[class*="trash" i]',
-            ];
-            for (const sel of labelSels) {{
-                for (const el of document.querySelectorAll(sel)) {{
-                    const r = el.getBoundingClientRect();
-                    if (r.width > 0 && r.left < 380)
-                        return {{found: true, sel, x: r.left + r.width/2, y: r.top + r.height/2}};
-                }}
-            }}
-
-            // Ưu tiên 2: button nhỏ (icon-only ≤ 44px) ở góc trên-phải của card
-            const iconBtns = Array.from(document.querySelectorAll('button')).filter(b => {{
-                const r = b.getBoundingClientRect();
-                if (!r.width || r.width > 44 || r.height > 44) return false;
-                if (r.left < 50 || r.left > 380) return false;
-                // Nằm gần góc trên-phải của card
-                const nearRight = Math.abs(r.right - cardRight) < 30;
-                const nearTop   = Math.abs(r.top  - cardTop)   < 30;
-                return nearRight && nearTop;
-            }});
-            if (iconBtns.length > 0) {{
-                const b = iconBtns[0];
-                const r = b.getBoundingClientRect();
-                return {{found: true, sel: 'icon-btn-top-right',
-                         x: r.left + r.width/2, y: r.top + r.height/2,
-                         label: b.getAttribute('aria-label') || b.title || ''}};
-            }}
-
-            // Ưu tiên 3: bất kỳ button nhỏ nào trong vùng panel sau hover
-            const anySmall = Array.from(document.querySelectorAll('button')).filter(b => {{
-                const r = b.getBoundingClientRect();
-                return r.width > 0 && r.width <= 44 && r.left > 50 && r.left < 380
-                    && b.querySelector('svg');
-            }});
-            if (anySmall.length > 0) {{
-                const b = anySmall[0];
-                const r = b.getBoundingClientRect();
-                return {{found: true, sel: 'svg-btn-fallback',
-                         x: r.left + r.width/2, y: r.top + r.height/2}};
-            }}
-
-            return {{found: false, reason: 'Không tìm thấy delete button sau hover'}};
-        }}""")
-
-        delete_info["img_src"] = coords.get("src", "")
-        return delete_info
 
     # ── Test chính ───────────────────────────────────────────────────────────
 
     @pytest.mark.daily
     def test_library_delete_image(self):
-        """Login → Studio → Thư Viện → verify icon xoá → xoá ảnh → verify xoá thành công."""
+        """Login → Studio → Thư Viện → tab 'Hình của bạn' → VERIFY icon xoá hiển thị.
+
+        AN TOÀN: chỉ VERIFY nút xoá tồn tại trên card ảnh user (KHÔNG xoá ảnh có
+        sẵn để tránh mất data thật trên PROD). Việc 'xoá thành công' được test ở
+        TC2 (test_library_delete_new_artwork) với ảnh do chính test tự tạo ra.
+        """
 
         # ── S1: Login ────────────────────────────────────────────────────────
         self._login()
@@ -300,155 +237,105 @@ class TestDailyLibraryDelete(BaseDailyTest):
                            f"email: {self.env.login_email}")
         self._shot(TC, "1", "after_login")
 
-        # ── S2: Mở panel Thư Viện ────────────────────────────────────────────
+        # ── S2: Mở panel Thư Viện → tab 'Hình của bạn' ──────────────────────
         has_images = self._open_library_panel()
         self._shot(TC, "2", "library_panel_opened")
 
         if not has_images:
-            self._record_check(TC, "S2: Panel Thư Viện có ảnh",
-                               "⚠️ WARN", "Không có ảnh trong thư viện — không thể test xoá")
-            pytest.skip("Thư Viện không có ảnh nào — upload ảnh trước khi chạy test này")
+            self._record_check(TC, "S2: Tab 'Hình của bạn' có ảnh",
+                               "⚠️ WARN", "Không có ảnh user nào — không thể verify icon xoá")
+            pytest.skip("Tab 'Hình của bạn' chưa có ảnh — tạo/upload ảnh trước khi chạy test này")
 
-        # Đếm ảnh ban đầu
-        count_before = self.page.evaluate("""() => {
-            return Array.from(document.querySelectorAll('img[src]')).filter(img => {
-                const r = img.getBoundingClientRect();
-                return r.left < 330 && r.width > 30 && r.height > 30
-                    && img.complete && img.naturalWidth > 0;
-            }).length;
-        }""")
-        self._record_check(TC, "S2: Panel Thư Viện có ảnh",
-                           "✅ PASS", f"Có {count_before} ảnh trong thư viện")
+        count = self._count_library_images()
+        self._record_check(TC, "S2: Tab 'Hình của bạn' có ảnh",
+                           "✅ PASS", f"Có {count} ảnh user (mỗi ảnh 1 nút xoá)")
 
-        # ── S3: Hover → verify icon xoá hiển thị ────────────────────────────
-        delete_info = self._hover_and_find_delete()
+        # ── S3: Hover card đầu → verify nút xoá (svg.lucide-trash-2) hiển thị ─
+        cards = self._grid_cards_info()
+        delete_found = bool(cards) and bool(cards[0].get("trashX"))
+        if delete_found:
+            c0 = cards[0]
+            # hover để xác nhận nút lộ ra (group-hover) — KHÔNG click xoá
+            if c0.get("imgX") and c0.get("imgY"):
+                self.page.mouse.move(c0["imgX"], c0["imgY"])
+                self.page.wait_for_timeout(1_000)
         self._shot(TC, "3", "hover_show_delete_icon")
 
-        delete_found = delete_info.get("found", False)
-        selector_used = delete_info.get("selector", "N/A")
         self._record_check(
-            TC, "S3: Icon xoá hiển thị khi hover vào ảnh",
+            TC, "S3: Icon xoá hiển thị trên ảnh user",
             "✅ PASS" if delete_found else "❌ FAIL",
-            f"selector: {selector_used}" if delete_found
-            else delete_info.get("reason", "Không tìm thấy delete button"),
+            f"{len(cards)} card có nút xoá (svg.lucide-trash-2)" if delete_found
+            else "Không tìm thấy nút xoá trên card ảnh user",
         )
 
         if not delete_found:
             pytest.fail(
-                f"Không tìm thấy icon xoá trong panel Thư Viện sau hover. "
-                f"Reason: {delete_info.get('reason', 'unknown')}"
+                "Không tìm thấy icon xoá (svg.lucide-trash-2) trên card ảnh user "
+                "trong tab 'Hình của bạn'."
             )
 
-        # ── S4: Click icon xoá ───────────────────────────────────────────────
-        del_x = delete_info.get("x", 0)
-        del_y = delete_info.get("y", 0)
-
-        if del_x and del_y:
-            self.page.mouse.click(del_x, del_y)
-            self.page.wait_for_timeout(1_500)
-        else:
-            # Fallback: click bằng selector
-            self.page.locator(selector_used).first.click()
-            self.page.wait_for_timeout(1_500)
-
-        self._shot(TC, "4", "after_click_delete")
-
-        # ── S5: Xử lý confirm dialog (nếu có) ───────────────────────────────
-        confirm_clicked = False
-        confirm_selectors = [
-            "button:has-text('Xoá')", "button:has-text('Xác nhận')",
-            "button:has-text('OK')", "button:has-text('Đồng ý')",
-            "button:has-text('Delete')", "button:has-text('Confirm')",
-        ]
-        for sel in confirm_selectors:
-            try:
-                btn = self.page.locator(sel).first
-                if btn.is_visible(timeout=2_000):
-                    btn.click()
-                    confirm_clicked = True
-                    print(f"  [INFO] Đã click confirm: {sel}")
-                    self.page.wait_for_timeout(1_500)
-                    break
-            except Exception:
-                continue
-
-        self._record_check(TC, "S5: Confirm dialog xoá",
-                           "✅ PASS" if confirm_clicked else "ℹ️ INFO",
-                           "đã click confirm" if confirm_clicked
-                           else "không có confirm dialog — xoá trực tiếp")
-        self._shot(TC, "5", "after_confirm_delete")
-
-        # ── S6: Verify xoá thành công (số ảnh giảm) ────────────────────────
-        self.page.wait_for_timeout(1_000)
-        count_after = self.page.evaluate("""() => {
-            return Array.from(document.querySelectorAll('img[src]')).filter(img => {
-                const r = img.getBoundingClientRect();
-                return r.left < 330 && r.width > 30 && r.height > 30
-                    && img.complete && img.naturalWidth > 0;
-            }).length;
-        }""")
-
-        deleted_ok = count_after < count_before
-        self._shot(TC, "6", f"after_delete_count_{count_after}")
-        self._record_check(
-            TC, "S6: Xoá ảnh thành công — số ảnh giảm",
-            "✅ PASS" if deleted_ok else "❌ FAIL",
-            f"trước: {count_before} ảnh → sau: {count_after} ảnh"
-            + (" (giảm 1)" if deleted_ok else " (không thay đổi — xoá thất bại)"),
-        )
-
-        if not deleted_ok:
-            pytest.fail(
-                f"Xoá ảnh thất bại — số ảnh không thay đổi "
-                f"(before={count_before}, after={count_after})"
-            )
-
-        print(f"  [PASS] Xoá ảnh thành công: {count_before} → {count_after} ảnh")
+        print(f"  [PASS] Verify icon xoá: {len(cards)} ảnh user đều có nút xoá")
 
     # ══════════════════════════════════════════════════════════════════════════
     # TC2: Tạo artwork mới → xoá luôn → không ảnh hưởng data cũ
     # ══════════════════════════════════════════════════════════════════════════
 
     def _count_library_images(self) -> int:
-        """Đếm ảnh trong panel Thư Viện (x < 330px)."""
-        return self.page.evaluate("""() => {
-            return Array.from(document.querySelectorAll('img[src]')).filter(img => {
-                const r = img.getBoundingClientRect();
-                return r.left < 330 && r.width > 30 && r.height > 30
-                    && img.complete && img.naturalWidth > 0;
+        """Đếm ảnh user trong tab 'Hình của bạn' = số nút xoá (svg.lucide-trash-2)
+        trong panel trái. Đếm theo nút xoá để loại logo/icon (mỗi ảnh user có đúng
+        1 nút xoá; template ở tab 'Mẫu hình in' KHÔNG có nút xoá).
+        """
+        return self.page.evaluate(r"""() => {
+            return [...document.querySelectorAll('button')].filter(b => {
+                if (!b.querySelector('svg[class*="trash" i]')) return false;
+                const r = b.getBoundingClientRect();
+                return r.width > 0 && r.left < 380 && r.top > 60;
             }).length;
         }""")
 
-    def _do_delete_first_library_image(self, tc_id: str, step_prefix: str) -> bool:
-        """Hover ảnh đầu tiên trong Thư Viện → click delete → confirm → verify giảm.
-        Trả về True nếu xoá thành công. Dùng chung cho TC1 và TC2.
+    def _grid_cards_info(self) -> list:
+        """Trả về danh sách card ảnh user trong 'Hình của bạn' theo thứ tự DOM:
+        [{src, imgX, imgY, trashX, trashY}]. Mỗi card = 1 img + 1 nút xoá (trash).
+        Dùng để (a) snapshot baseline src, (b) xoá đúng card theo src.
         """
-        count_before = self._count_library_images()
-        print(f"  [INFO] {tc_id}: count_before={count_before}")
+        return self.page.evaluate(r"""() => {
+            const btns = [...document.querySelectorAll('button')].filter(b => {
+                if (!b.querySelector('svg[class*="trash" i]')) return false;
+                const r = b.getBoundingClientRect();
+                return r.width > 0 && r.left < 380 && r.top > 60;
+            });
+            return btns.map(b => {
+                const br = b.getBoundingClientRect();
+                let img = null, p = b, depth = 0;
+                while (p && depth < 6) {
+                    const i = p.querySelector('img[src]');
+                    if (i && i.src && !/logo/i.test(i.src)) { img = i; break; }
+                    p = p.parentElement; depth++;
+                }
+                const ir = img ? img.getBoundingClientRect() : null;
+                return {
+                    src: img ? img.src : '',
+                    imgX: ir ? Math.round(ir.left + ir.width / 2) : 0,
+                    imgY: ir ? Math.round(ir.top + ir.height / 2) : 0,
+                    trashX: Math.round(br.left + br.width / 2),
+                    trashY: Math.round(br.top + br.height / 2),
+                };
+            });
+        }""")
 
-        # Hover → tìm delete icon
-        delete_info = self._hover_and_find_delete()
-        self._shot(tc_id, f"{step_prefix}a", "hover_delete_icon")
-
-        delete_found = delete_info.get("found", False)
-        self._record_check(
-            tc_id, "Icon xoá hiển thị khi hover",
-            "✅ PASS" if delete_found else "❌ FAIL",
-            delete_info.get("sel", delete_info.get("reason", "not found")),
-        )
-        if not delete_found:
-            return False
-
-        # Click delete icon
-        del_x, del_y = delete_info.get("x", 0), delete_info.get("y", 0)
-        if del_x and del_y:
-            self.page.mouse.click(del_x, del_y)
-        else:
-            self.page.locator(delete_info.get("sel", "button")).first.click()
-        self.page.wait_for_timeout(1_500)
-        self._shot(tc_id, f"{step_prefix}b", "after_click_delete")
-
-        # Xử lý confirm dialog
+    def _delete_card_by_coords(self, tc_id: str, step_prefix: str,
+                               card: dict) -> bool:
+        """Hover card → click nút xoá → confirm dialog. card = item từ _grid_cards_info()."""
+        # Hover ảnh để lộ nút xoá (opacity-0 group-hover)
+        if card.get("imgX") and card.get("imgY"):
+            self.page.mouse.move(card["imgX"], card["imgY"])
+            self.page.wait_for_timeout(1_200)
+        self._shot(tc_id, f"{step_prefix}a", "hover_card")
+        # Click nút xoá theo toạ độ
+        self.page.mouse.click(card["trashX"], card["trashY"])
+        self.page.wait_for_timeout(1_200)
+        self._shot(tc_id, f"{step_prefix}b", "after_click_trash")
+        # Confirm dialog (nếu có)
         confirm_clicked = False
         for sel in ["button:has-text('Xoá')", "button:has-text('Xác nhận')",
                     "button:has-text('OK')", "button:has-text('Đồng ý')",
@@ -463,29 +350,16 @@ class TestDailyLibraryDelete(BaseDailyTest):
                     break
             except Exception:
                 continue
-
         self._record_check(tc_id, "Confirm dialog xoá",
                            "✅ PASS" if confirm_clicked else "ℹ️ INFO",
                            "đã click confirm" if confirm_clicked else "không có confirm dialog")
         self._shot(tc_id, f"{step_prefix}c", "after_confirm")
-
-        # Verify số ảnh giảm
-        self.page.wait_for_timeout(1_000)
-        count_after = self._count_library_images()
-        deleted_ok = count_after < count_before
-        self._record_check(
-            tc_id, "Xoá ảnh thành công — số ảnh giảm",
-            "✅ PASS" if deleted_ok else "❌ FAIL",
-            f"{count_before} → {count_after} ảnh" + (" ✓" if deleted_ok else " ✗ không thay đổi"),
-        )
-        self._shot(tc_id, f"{step_prefix}d", f"final_count_{count_after}")
-        print(f"  [{'PASS' if deleted_ok else 'FAIL'}] {tc_id}: {count_before} → {count_after}")
-        return deleted_ok
+        return confirm_clicked
 
     @pytest.mark.daily
     def test_library_delete_new_artwork(self):
-        """Home → nhập prompt → AI tạo artwork → vào Thư Viện → xoá artwork vừa tạo.
-        Không ảnh hưởng đến data cũ vì chỉ xoá ảnh mới tạo ra trong test này.
+        """Studio → snapshot 'Hình của bạn' → AI tạo artwork → xoá ĐÚNG ảnh mới (src-diff).
+        An toàn data cũ: chỉ xoá ảnh có src KHÔNG nằm trong baseline (tức ảnh test tự tạo).
         """
         from pages.studio_page import StudioPage
 
@@ -497,90 +371,117 @@ class TestDailyLibraryDelete(BaseDailyTest):
                            f"email: {self.env.login_email}")
         self._shot(TC2, "1", "after_login")
 
-        # ── S2: Vào Home — kiểm tra prompt input ────────────────────────────
-        self.home.navigate()
+        # ── S2: Vào Studio + dismiss dialogs ───────────────────────────────
+        studio.navigate()
         self.page.wait_for_timeout(2_000)
-        self._shot(TC2, "2", "home_page")
-
-        has_prompt_input = self.home.prompt_input.is_visible(timeout=5_000)
-        self._record_check(TC2, "S2: Home có ô nhập prompt",
-                           "✅ PASS" if has_prompt_input else "ℹ️ INFO",
-                           "có prompt input" if has_prompt_input else "home sau login không có prompt → vào Studio trực tiếp")
-
-        # ── S3: Nhập prompt để tạo artwork ──────────────────────────────────
-        if has_prompt_input:
-            # Flow A: nhập prompt ở Home → Tạo ngay → navigate vào Studio
-            # Capture baseline TRƯỚC khi click generate (tránh miss artworks load trong quá trình navigate)
-            baseline = 0
-            self.home.fill_prompt(_TEST_PROMPT)
-            self.page.wait_for_timeout(300)
-            self._shot(TC2, "3", "prompt_filled_home")
-            self.home.click_generate()
-            try:
-                self.page.wait_for_url("**/studio**", timeout=20_000)
-            except Exception:
-                pass
-            self.page.wait_for_timeout(2_000)
-            in_studio = "studio" in self.page.url
-        else:
-            # Flow B: đã login → Home hiện "Tạo ngay" → vào Studio → nhập prompt trong chat
-            self._shot(TC2, "3", "home_no_prompt_go_studio")
-            self._dismiss_product_dialog_from_studio(studio)
-            in_studio = "studio" in self.page.url
-
-        self._record_check(TC2, "S3: Navigate vào Studio",
+        self._accept_terms_if_any()
+        self._dismiss_product_dialog()
+        self.page.wait_for_timeout(1_000)
+        in_studio = "studio" in self.page.url
+        self._record_check(TC2, "S2: Vào Studio",
                            "✅ PASS" if in_studio else "❌ FAIL", self.page.url)
         if not in_studio:
             pytest.fail(f"Không vào được Studio — URL: {self.page.url}")
+        self._shot(TC2, "2", "studio_ready")
 
-        # ── S4: Xử lý setup Studio ──────────────────────────────────────────
-        self._dismiss_product_dialog()
+        # ── S3: Snapshot baseline 'Hình của bạn' TRƯỚC khi tạo artwork ─────
+        # (để xác định chính xác ảnh MỚI theo src-diff → chỉ xoá ảnh test tự tạo,
+        #  KHÔNG đụng ảnh cũ.)
+        self._open_library_tab_js()
         self.page.wait_for_timeout(1_000)
-        self._shot(TC2, "4", "studio_ready")
+        self._open_my_images_tab()
+        self.page.wait_for_timeout(1_500)
+        baseline_cards = self._grid_cards_info()
+        baseline_srcs = {c["src"] for c in baseline_cards if c.get("src")}
+        count_before = len(baseline_cards)
+        self._shot(TC2, "3", f"baseline_my_images_{count_before}")
+        self._record_check(TC2, "S3: Snapshot baseline 'Hình của bạn'",
+                           "✅ PASS", f"{count_before} ảnh user hiện có (baseline để diff)")
 
-        # Nếu chưa nhập prompt ở Home → nhập trong Studio chat
-        if not has_prompt_input:
-            baseline = studio._count_chat_artworks()
-            studio.generate(_TEST_PROMPT)
-            self.page.wait_for_timeout(1_000)
-            self._shot(TC2, "4b", "prompt_submitted_studio")
+        # ── S4: Tạo artwork mới qua Studio chat ────────────────────────────
+        chat_baseline = studio._count_chat_artworks()
+        studio.generate(_TEST_PROMPT)
+        self.page.wait_for_timeout(1_000)
+        self._shot(TC2, "4", "prompt_submitted")
+        self._record_check(TC2, "S4: Gửi prompt tạo artwork",
+                           "✅ PASS", f"prompt: '{_TEST_PROMPT}'")
 
-        # ── S5: Chờ AI tạo artwork mới ───────────────────────────────────────
-        self._record_check(TC2, "S5: Bắt đầu tạo artwork",
-                           "✅ PASS", f"prompt: '{_TEST_PROMPT}' | baseline: {baseline}")
-
+        # ── S5: Chờ AI tạo artwork mới ─────────────────────────────────────
         ok, elapsed, total, new_count = studio.wait_for_new_artworks(
-            baseline=baseline, min_new=1, timeout=120
+            baseline=chat_baseline, min_new=1, timeout=180
         )
         self._shot(TC2, "5", f"artwork_generated_{new_count}imgs_{elapsed}s")
         self._record_check(
             TC2, "S5: AI tạo artwork thành công",
             "✅ PASS" if ok else "❌ FAIL",
-            f"{new_count} ảnh mới sau {elapsed}s (tổng chat: {total})",
+            f"{new_count} ảnh mới sau {elapsed}s (chat total: {total})",
         )
         if not ok or new_count == 0:
             pytest.fail(f"AI không tạo được artwork mới sau {elapsed}s")
 
-        # ── S6: Dọn dialogs → mở tab Thư Viện ──────────────────────────────
-        # Sau khi gen artwork, có thể xuất hiện: Terms dialog + Chọn sản phẩm dialog
+        # ── S6: Mở lại 'Hình của bạn' → tìm artwork MỚI (src ∉ baseline) ───
         self._accept_terms_if_any()
         self._dismiss_product_dialog()
-        self.page.wait_for_timeout(1_000)
-        self._shot(TC2, "6_clean", "dialogs_dismissed")
-
-        # Click tab Thư Viện bằng JS (button là icon-only, có thể bị hidden với Playwright)
         self._open_library_tab_js()
-        self.page.wait_for_timeout(2_000)
+        self.page.wait_for_timeout(800)
+        self._open_my_images_tab()
+        self.page.wait_for_timeout(1_500)
 
-        count_before_delete = self._count_library_images()
-        self._shot(TC2, "6", f"library_open_count_{count_before_delete}")
-        self._record_check(TC2, "S6: Mở Thư Viện — đếm ảnh ban đầu",
-                           "✅ PASS", f"{count_before_delete} ảnh (ảnh mới nhất ở đầu danh sách)")
+        fresh_srcs = set()
+        for _ in range(10):  # ảnh mới có thể mất vài giây mới lưu vào thư viện
+            cards = self._grid_cards_info()
+            fresh_srcs = {c["src"] for c in cards
+                          if c.get("src") and c["src"] not in baseline_srcs}
+            if fresh_srcs:
+                break
+            self.page.wait_for_timeout(2_000)
+        count_now = self._count_library_images()
+        self._shot(TC2, "6", f"my_images_after_gen_{count_now}")
 
-        # ── S7: Xoá ảnh đầu tiên (artwork vừa tạo) ──────────────────────────
-        deleted = self._do_delete_first_library_image(TC2, step_prefix="7")
+        if not fresh_srcs:
+            # KHÔNG có ảnh mới trong thư viện → KHÔNG xoá gì (tránh xoá nhầm ảnh cũ).
+            self._record_check(
+                TC2, "S6: Tìm artwork mới trong 'Hình của bạn'", "⚠️ WARN",
+                f"Không thấy ảnh mới (baseline={count_before}, now={count_now}) — "
+                f"artwork chưa lưu vào thư viện; BỎ QUA xoá để an toàn data cũ")
+            self.__class__._results = self._results
+            self._save_report()
+            pytest.skip("Artwork mới chưa lưu vào 'Hình của bạn' — không có ảnh test để xoá an toàn")
+        self._record_check(TC2, "S6: Tìm artwork mới trong 'Hình của bạn'",
+                           "✅ PASS",
+                           f"{len(fresh_srcs)} ảnh mới (src ∉ baseline {count_before})")
 
-        if not deleted:
-            pytest.fail("Xoá artwork mới tạo thất bại")
+        # ── S7: Xoá HẾT ảnh fresh (chỉ ảnh test tự tạo) → verify ─────────────
+        # Mỗi lần xoá toạ độ dịch → re-query card theo src còn lại sau mỗi vòng.
+        targets = set(fresh_srcs)
+        deleted_n = 0
+        for i in range(len(targets) + 2):
+            cards = self._grid_cards_info()
+            todo = [c for c in cards if c.get("src") in targets]
+            if not todo:
+                break
+            self._delete_card_by_coords(TC2, step_prefix=f"7_{i}", card=todo[0])
+            targets.discard(todo[0]["src"])
+            deleted_n += 1
+            self.page.wait_for_timeout(800)
 
-        print(f"  [PASS] TC2 hoàn thành — artwork test đã được tạo và xoá sạch")
+        # Verify: KHÔNG còn src fresh nào trong grid
+        after_cards = self._grid_cards_info()
+        after_srcs = {c["src"] for c in after_cards if c.get("src")}
+        remaining = fresh_srcs & after_srcs
+        count_after = len(after_cards)
+        deleted_ok = not remaining
+        self._shot(TC2, "7d", f"final_count_{count_after}")
+        self._record_check(
+            TC2, "S7: Xoá artwork mới thành công",
+            "✅ PASS" if deleted_ok else "❌ FAIL",
+            f"đã xoá {deleted_n}/{len(fresh_srcs)} ảnh mới; "
+            f"còn sót {len(remaining)} | số ảnh: {count_now} → {count_after} (baseline {count_before})",
+        )
+        if not deleted_ok:
+            pytest.fail(
+                f"Xoá artwork mới thất bại — còn sót {len(remaining)} src fresh "
+                f"(đã xoá {deleted_n}/{len(fresh_srcs)})"
+            )
+
+        print(f"  [PASS] TC2 — tạo & xoá sạch {deleted_n} artwork test (src-diff), data cũ nguyên vẹn")

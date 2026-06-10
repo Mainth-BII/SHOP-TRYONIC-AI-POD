@@ -26,7 +26,10 @@ jobs:
         run: |
           F=.github/workflows/e2e-test.yml
           grep -q -- "--env=test" "$F" || { echo "::error::E2E phải chạy --env=test"; exit 1; }
-          if grep -qE "\-\-env=prod|shop\.tryonic\.ai[^.]|tests/production/" "$F"; then
+          # Quét pattern PROD nhưng BỎ QUA chính 2 dòng định nghĩa guard (chứa
+          # literal pattern + thông điệp lỗi) để tránh guard tự khớp chính nó.
+          if grep -vE 'grep -[qv]E|::error::E2E' "$F" \
+               | grep -qE "\-\-env=prod|shop\.tryonic\.ai[^.]|tests/production/"; then
             echo "::error::E2E KHÔNG được dính --env=prod / PROD URL / tests/production/"; exit 1; fi
           echo "✅ E2E job → môi trường TEST, chỉ tests/e2e/ (đã khóa thêm ở conftest)"
 

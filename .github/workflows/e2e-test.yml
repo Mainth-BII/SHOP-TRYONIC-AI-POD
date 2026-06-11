@@ -67,6 +67,7 @@ jobs:
             --env=test \
             --browser chromium \
             -v \
+            -rs \
             --tb=short \
             -p no:cacheprovider \
             --junit-xml=reports/junit-e2e.xml \

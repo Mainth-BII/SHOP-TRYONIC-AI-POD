@@ -49,6 +49,15 @@ class TestE2ELifecycle(BaseDailyTest):
         env = self.env
         assert env.name == "test", f"🚫 E2E chỉ chạy TEST, đang {env.name}"
         if not env.admin_email or not env.admin_password:
+            # Ghi WARN vào report TRƯỚC khi skip → notify hiện rõ suite này bị bỏ
+            # qua vì thiếu creds (thay vì biến mất lặng lẽ khỏi report).
+            self._record_check(
+                "L0", "Admin credentials", "⚠️ WARN",
+                "Thiếu ADMIN_TEST_EMAIL/ADMIN_TEST_PASSWORD → BỎ QUA luồng Admin",
+                "set 2 secret này trong CI (Settings → Secrets)",
+            )
+            self.__class__._results = list(self._results)
+            self._save_report()
             pytest.skip("Thiếu admin credentials TEST (ADMIN_TEST_EMAIL/PASSWORD)")
 
         # L1 — khách đặt COD

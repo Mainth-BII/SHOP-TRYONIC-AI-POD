@@ -67,7 +67,7 @@ class AdminFulfillmentFlow:
         shot(self.page, "adm_04_lenh_in_vendor_TuanHai")
         self.record("L4", f"Chọn xưởng in '{VENDOR}'",
                     "✅ PASS" if assigned else "⚠️ WARN", f"assigned={assigned}")
-        sent, smsg = self.print_jobs.mark_sent_when_ready()
+        sent, smsg = self.print_jobs.mark_sent_when_ready(code)
         shot(self.page, "adm_05_mark_sent")
         self.record("L4", "Đánh dấu đã gửi → Đang in (flow thật)",
                     "✅ PASS" if sent else "⚠️ WARN", smsg)

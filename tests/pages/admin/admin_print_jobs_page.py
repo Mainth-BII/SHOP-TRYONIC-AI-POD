@@ -53,40 +53,68 @@ class AdminPrintJobsPage:
             pass
         return False
 
-    def mark_sent_when_ready(self, retries: int = 3, wait_ms: int = 5_000) -> tuple[bool, str]:
-        """Chờ 'Đánh dấu đã gửi' bật (mọi lệnh in READY) rồi bấm.
+    # JS: thao tác trong ĐÚNG row của đơn (scope theo code) — tránh chạm nút
+    # 'Làm mới'/'Đánh dấu đã gửi' của đơn khác (list nhiều đơn) hoặc nút global.
+    _ROW_JS = r"""(args) => {
+        const [code, action] = args;
+        // tìm element lá chứa code → leo lên row chứa nút 'Đánh dấu đã gửi'
+        let el = [...document.querySelectorAll('*')].find(
+            e => e.childElementCount===0 && (e.textContent||'').trim().includes(code));
+        if (!el) return {found:false};
+        let row = el;
+        for (let i=0;i<10 && row;i++){
+            const bs=[...row.querySelectorAll('button')];
+            if (bs.some(b=>(b.innerText||'').includes('Đánh dấu đã gửi'))) break;
+            row=row.parentElement;
+        }
+        if (!row) return {found:false, expandedNeeded:true};
+        const bs=[...row.querySelectorAll('button')];
+        const mark = bs.find(b=>(b.innerText||'').includes('Đánh dấu đã gửi'));
+        const refresh = bs.find(b=>(b.innerText||'').trim()==='Làm mới');
+        const state = {found:true, hasMark:!!mark,
+                       markEnabled: mark? !mark.disabled : false, hasRefresh:!!refresh};
+        if (action==='mark' && mark && !mark.disabled) { mark.click(); state.acted='mark'; }
+        if (action==='refresh' && refresh && !refresh.disabled) { refresh.click(); state.acted='refresh'; }
+        return state;
+    }"""
 
-        Export async trên TEST RẤT CHẬM (fresh order thường >13 phút) → KHÔNG
-        chờ dài inline (chờ dài làm hỏng session admin/Yopmail ở các bước sau).
-        Chỉ poll ~1 phút; nếu chưa READY → trả WARN, verify email 'đang được in'
-        được làm RIÊNG trên đơn đã READY (xem DEFECT note). Thoát sớm khi READY.
-        Thúc 'Chạy lại tất cả' MỘT lần (vòng 4) nếu chưa nhúc nhích; còn lại chỉ
-        'Làm mới' + chờ (tránh re-trigger export làm reset về PROCESSING). Trả (ok, msg).
+    def _row_action(self, code: str, action: str = "state") -> dict:
+        try:
+            return self.page.evaluate(self._ROW_JS, [code, action]) or {"found": False}
+        except Exception as e:
+            return {"found": False, "err": str(e)}
+
+    def mark_sent_when_ready(self, code: str = "", max_wait_s: int = 1_080,
+                             poll_ms: int = 20_000) -> tuple[bool, str]:
+        """Bấm 'Làm mới' (trong ĐÚNG row của đơn) lặp lại để refresh trạng thái
+        lệnh in CHO ĐẾN KHI READY (nút 'Đánh dấu đã gửi' bật) rồi bấm — path THẬT.
+
+        UI: màn /print-jobs là LIST nhiều đơn; mỗi đơn (sau khi mở rộng) có nút
+        'Làm mới' + 'Đánh dấu đã gửi' (disabled với title 'Phải đợi tất cả lệnh in
+        về READY' khi chưa xong export). Thao tác qua JS scope theo `code` để KHÔNG
+        chạm đơn khác. Export async TEST có thể >13 phút → poll tới max_wait_s; hết
+        giờ → (False) để flow fallback (progression). Trả (ok, msg).
         """
-        for i in range(max(1, retries)):
-            btn = self.page.locator("button:has-text('Đánh dấu đã gửi')").first
-            try:
-                if btn.is_visible(timeout=2_000) and not btn.is_disabled():
-                    btn.click()
-                    self.page.wait_for_timeout(3_000)
-                    return True, f"đã bấm 'Đánh dấu đã gửi' sau ~{i * wait_ms // 1000}s chờ READY"
-            except Exception:
-                pass
-            if i == 4:  # thúc pipeline 1 lần duy nhất
-                for lbl in ("Chạy lại tất cả", "Chạy tất cả"):
-                    try:
-                        rb = self.page.locator(f"button:has-text('{lbl}')").first
-                        if rb.is_visible(timeout=1_500) and not rb.is_disabled():
-                            rb.click()
-                            self.page.wait_for_timeout(3_000)
-                            break
-                    except Exception:
-                        continue
-            try:
-                r = self.page.locator("button:has-text('Làm mới')").first
-                if r.is_visible(timeout=1_000):
-                    r.click()
-            except Exception:
-                pass
-            self.page.wait_for_timeout(wait_ms)
-        return False, f"'Đánh dấu đã gửi' vẫn disabled sau ~{retries * wait_ms // 1000}s (lệnh in chưa READY)"
+        import time, os
+        max_wait_s = int(os.getenv("MARK_SENT_MAX_WAIT_S", max_wait_s))
+        start = time.time()
+        deadline = start + max_wait_s
+        refreshes = 0
+        while True:
+            st = self._row_action(code, "mark")  # check + click nếu đã bật
+            if st.get("acted") == "mark":
+                self.page.wait_for_timeout(3_000)
+                el = int(time.time() - start)
+                return True, f"đã bấm 'Đánh dấu đã gửi' sau ~{el}s ({refreshes} lần Làm mới)"
+            if not st.get("found"):
+                # row chưa mở rộng / chưa thấy → mở lại chi tiết đơn rồi thử tiếp
+                self.open_order_detail(code)
+            if time.time() >= deadline:
+                el = int(time.time() - start)
+                return False, (f"'Đánh dấu đã gửi' vẫn disabled sau ~{el}s / {refreshes} lần "
+                               f"Làm mới (row found={st.get('found')}, mark={st.get('hasMark')}, "
+                               f"enabled={st.get('markEnabled')}) — lệnh in chưa READY")
+            rf = self._row_action(code, "refresh")
+            if rf.get("acted") == "refresh":
+                refreshes += 1
+            self.page.wait_for_timeout(poll_ms)

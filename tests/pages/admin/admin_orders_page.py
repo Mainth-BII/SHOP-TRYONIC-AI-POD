@@ -16,6 +16,8 @@ class AdminOrdersPage:
     def goto(self) -> None:
         self.page.goto(f"{self.base}/orders")
         self.page.wait_for_timeout(2_500)
+        # KHÔNG dùng networkidle (admin có polling → không idle, phí 10s mỗi goto).
+        # Độ bền render chậm trên CI do _wait_next_button lo (poll + re-goto).
 
     def _row_selectors(self, code: str) -> list[str]:
         # Container PHẢI chứa order code → an toàn, không trúng đơn khác.
@@ -105,11 +107,15 @@ class AdminOrdersPage:
         khi dòng không match). Với bước cuối (delivered) expect_next=None → verify
         dòng vẫn còn + nút '→ {next_label}' đã biến mất. Retry nếu chưa ăn."""
         self.goto()
-        if not self._has_next_button(code, next_label):
+        # Chờ-kiên-nhẫn nút xuất hiện (CI render chậm / trạng thái vừa đổi cần vài
+        # giây mới hiện nút kế): poll + re-goto thay vì bỏ cuộc ngay sau goto đầu.
+        if not self._wait_next_button(code, next_label):
+            print(f"  [advance_status] '{next_label}' KHÔNG xuất hiện sau khi chờ. "
+                  f"Trạng thái đơn hiện tại: {self.status_text(code)[:140]!r}")
             return False
         for _ in range(max(1, retries)):
             self._click_and_confirm(code, next_label)  # đã chờ modal đóng (request xong)
-            self.page.wait_for_timeout(1_000)
+            self.page.wait_for_timeout(1_200)
             self.goto()  # reload + verify
             if expect_next:
                 if self._has_next_button(code, expect_next):
@@ -117,6 +123,19 @@ class AdminOrdersPage:
             else:
                 if self._row_found(code) and not self._has_next_button(code, next_label):
                     return True
+        print(f"  [advance_status] '{next_label}'→'{expect_next}' verify FAIL sau {retries} lần. "
+              f"Trạng thái đơn: {self.status_text(code)[:140]!r}")
+        return False
+
+    def _wait_next_button(self, code: str, next_label: str, attempts: int = 4) -> bool:
+        """Chờ nút '→ {next_label}' xuất hiện trong dòng đơn, poll + re-goto giữa
+        các lần (CI headless render chậm / trạng thái vừa đổi)."""
+        for i in range(max(1, attempts)):
+            if self._has_next_button(code, next_label):
+                return True
+            self.page.wait_for_timeout(2_000)
+            if i < attempts - 1:
+                self.goto()
         return False
 
     def status_text(self, code: str) -> str:

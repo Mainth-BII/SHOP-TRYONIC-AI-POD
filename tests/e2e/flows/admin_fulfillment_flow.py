@@ -97,13 +97,17 @@ class AdminFulfillmentFlow:
         # L6 — Đang giao (Orders, qua updateStatus → có email)
         ship = self.orders.advance_status(code, "Đang giao", expect_next="Đã giao")
         shot(self.page, "adm_06_dang_giao")
-        self.record("L6", "Thao tác → Đang giao", "✅ PASS" if ship else "❌ FAIL",
-                    f"clicked={ship}")
+        _l6_detail = f"clicked={ship}"
+        if not ship:
+            _l6_detail += f" | trạng thái đơn hiện tại: {self.orders.status_text(code)[:90]}"
+        self.record("L6", "Thao tác → Đang giao", "✅ PASS" if ship else "❌ FAIL", _l6_detail)
         self._email("đang được giao", "L6", label="L6_dang_giao")
 
         # L7 — Đã giao + email
         deliv = self.orders.advance_status(code, "Đã giao")  # expect_next=None (delivered)
         shot(self.page, "adm_07_da_giao")
-        self.record("L7", "Thao tác → Đã giao", "✅ PASS" if deliv else "❌ FAIL",
-                    f"clicked={deliv}")
+        _l7_detail = f"clicked={deliv}"
+        if not deliv:
+            _l7_detail += f" | trạng thái đơn hiện tại: {self.orders.status_text(code)[:90]}"
+        self.record("L7", "Thao tác → Đã giao", "✅ PASS" if deliv else "❌ FAIL", _l7_detail)
         self._email("đã được giao", "L7", label="L7_da_giao")

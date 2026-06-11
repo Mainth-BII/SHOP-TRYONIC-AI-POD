@@ -209,6 +209,7 @@ def _build_daily_card(
     total_duration: float = 0,
     artifact_url: str = "",
     failure_screenshots: dict | None = None,
+    header_title: str = "🤖 Tryonic Daily Smoke",
 ) -> dict:
     """
     Xây Google Chat Card v2 cho daily smoke report.
@@ -389,7 +390,7 @@ def _build_daily_card(
             "cardId": "tryonic-daily-report",
             "card": {
                 "header": {
-                    "title":    f"🤖 Tryonic Daily Smoke — {header_icon}",
+                    "title":    f"{header_title} — {header_icon}",
                     "subtitle": f"{_ENV_LABEL}  |  {now}",
                     "imageUrl": "https://tryonic.ai/favicon.ico",
                     "imageType": "CIRCLE",
@@ -408,6 +409,7 @@ def send_daily_report(
     artifact_url: str = "",
     webhook_url: str = "",
     screenshots_base: str = "",
+    header_title: str = "🤖 Tryonic Daily Smoke",
 ) -> bool:
     """
     Gửi báo cáo daily smoke tổng hợp lên Google Chat.
@@ -456,6 +458,7 @@ def send_daily_report(
     payload = _build_daily_card(
         suites, total_duration, artifact_url,
         failure_screenshots=failure_screenshots,
+        header_title=header_title,
     )
 
     try:

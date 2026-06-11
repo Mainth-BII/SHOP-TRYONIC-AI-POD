@@ -31,6 +31,16 @@ class StudioPage(BasePage):
         ).first
 
     @property
+    def send_button(self) -> Locator:
+        """Nút GỬI prompt trong AI chat — là icon (lucide-send), KHÔNG có chữ 'Tạo'.
+        Ưu tiên icon send; fallback aria-label / nút 'Tạo ngay'."""
+        return self.page.locator(
+            "button:has(svg.lucide-send), button:has(svg[class*='send' i]), "
+            "button[aria-label*='gửi' i], button[aria-label*='send' i], "
+            "button:has-text('Tạo ngay')"
+        ).first
+
+    @property
     def finish_button(self) -> Locator:
         """Nút 'Hoàn tất thiết kế' — xuất hiện sau khi gen xong."""
         return self.page.locator(
@@ -191,18 +201,64 @@ class StudioPage(BasePage):
             print(f"  [WARN] select_product_if_needed error: {e}")
             return False
 
-    def generate(self, prompt: str) -> None:
+    def submit_prompt(self, prompt: str, retries: int = 3) -> bool:
+        """Điền prompt vào ô chat + GỬI, có VERIFY thực sự đã gửi (ô prompt trống lại).
+
+        Lý do: nút gửi là icon (lucide-send), không có chữ; trên CI headless việc
+        nhấn Enter thường KHÔNG submit (chỉ xuống dòng) → prompt nằm yên, AI không
+        nhận. Hàm này ưu tiên click nút send icon, fallback Enter, và VERIFY bằng
+        cách kiểm tra ô prompt đã trống (chat clear input sau khi gửi). Trả True nếu
+        gửi thành công.
+        """
         inp = self.prompt_input
-        inp.fill(prompt)
-        # Thử click nút generate; nếu không tìm thấy, dùng Enter để submit chat
         try:
-            btn = self.generate_button
-            if btn.is_visible(timeout=2_000):
-                btn.click()
-                return
+            inp.wait_for(state="visible", timeout=15_000)
         except Exception:
-            pass
-        inp.press("Enter")
+            print("  [WARN] submit_prompt: không thấy ô prompt")
+            return False
+
+        for attempt in range(1, retries + 1):
+            try:
+                inp.click()
+                inp.fill("")
+                inp.fill(prompt)
+                self.page.wait_for_timeout(400)
+            except Exception as e:
+                print(f"  [WARN] fill prompt lần {attempt}: {e}")
+                self.page.wait_for_timeout(1_000)
+                continue
+
+            # Submit: ưu tiên nút send icon (lucide-send), fallback Enter
+            clicked = False
+            try:
+                btn = self.send_button
+                if btn.is_visible(timeout=2_000) and btn.is_enabled(timeout=1_000):
+                    btn.click()
+                    clicked = True
+            except Exception:
+                pass
+            if not clicked:
+                try:
+                    inp.press("Enter")
+                except Exception:
+                    pass
+
+            # VERIFY: ô prompt đã trống (= đã gửi). Chat thường clear input sau gửi.
+            self.page.wait_for_timeout(1_000)
+            try:
+                val = (inp.input_value() or "").strip()
+            except Exception:
+                val = ""
+            if val == "":
+                print(f"  [INFO] prompt đã gửi (lần {attempt}, {'send-icon' if clicked else 'Enter'})")
+                return True
+            print(f"  [WARN] prompt CHƯA gửi (ô còn '{val[:30]}…') — thử lại lần {attempt+1}")
+
+        return False
+
+    def generate(self, prompt: str) -> None:
+        """Giữ tương thích — gọi submit_prompt (có verify + retry)."""
+        self.submit_prompt(prompt)
 
     def select_color(self, name: str) -> bool:
         """Tìm và click color swatch theo text, aria-label, title, data-color."""

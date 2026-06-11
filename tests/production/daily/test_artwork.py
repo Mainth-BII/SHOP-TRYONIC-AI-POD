@@ -77,35 +77,28 @@ class TestDailyArtwork(BaseDailyTest):
         self._record_check(TC, "S3: Baseline artworks", "✅ PASS",
                            f"{baseline} ảnh cũ trong chat panel")
 
-        # ── Fill prompt → chụp ảnh → submit ────────────────────────────────
-        _inp = self.studio.prompt_input
-        _input_visible = _inp.is_visible(timeout=5_000)
+        # ── Fill prompt → submit (verify đã gửi) ───────────────────────────
+        self._shot(TC, "2a", "before_submit")
+        # submit_prompt: click nút send icon (lucide-send), fallback Enter, và
+        # VERIFY ô prompt đã trống (= đã gửi). Tránh đổ lỗi nhầm cho AI ở S4.
+        _sent = self.studio.submit_prompt(prompt)
+        self.page.wait_for_timeout(1_000)
+        self._shot(TC, "2b", "prompt_submitted")
 
-        if _input_visible:
-            _inp.fill(prompt)
-            self.page.wait_for_timeout(500)
-            self._shot(TC, "2a", "prompt_filled")        # chụp lúc đang điền
-
-            # Submit: thử click nút Tạo trước, fallback Enter
-            try:
-                _btn = self.studio.generate_button
-                if _btn.is_visible(timeout=3_000):
-                    _btn.click()
-                else:
-                    raise Exception("not visible")
-            except Exception:
-                _inp.press("Enter")
-
-            self.page.wait_for_timeout(1_000)
-            self._shot(TC, "2b", "prompt_submitted")     # chụp sau khi submit
-        else:
-            self.studio.generate(prompt)                 # fallback gọi như cũ
-            self.page.wait_for_timeout(1_000)
-            self._shot(TC, "2b", "prompt_submitted")
-
-        self._record_check(TC, "S3: Gửi prompt",
-                           "✅ PASS" if _input_visible else "⚠️ WARN",
-                           f"{'Đã gửi' if _input_visible else 'Không tìm thấy input'}: \"{prompt[:80]}...\"")
+        self._record_check(
+            TC, "S3: Gửi prompt",
+            "✅ PASS" if _sent else "❌ FAIL",
+            f'Đã gửi: "{prompt[:60]}..."' if _sent
+            else "KHÔNG gửi được prompt — ô vẫn còn text sau khi submit",
+        )
+        if not _sent:
+            # Fail NGAY tại bước gửi (không chờ 240s rồi đổ lỗi AI)
+            self.__class__._results = self._results
+            self._save_report()
+            pytest.fail(
+                "Không gửi được prompt vào chat AI (ô prompt không trống sau submit) "
+                "— kiểm tra nút gửi (svg.lucide-send) / cơ chế submit của chat"
+            )
 
         # ── S4: Chờ AI trả về ≥ 1 ảnh mới ───────────────────────────────────
         # Timeout 240s: AI service PROD đôi khi chậm (~180s) → tránh false-FAIL

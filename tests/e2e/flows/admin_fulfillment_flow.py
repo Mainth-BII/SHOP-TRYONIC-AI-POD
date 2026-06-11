@@ -77,13 +77,21 @@ class AdminFulfillmentFlow:
         # (maybeSyncOrderStatus bỏ qua sendStatusChangeNotification) — khớp với
         # kiểm tra manual của QA. KHÔNG dùng path Orders updateStatus để làm xanh.
         if sent:
-            found = self._email("đang được in", "L4", label="L4_dang_in")
-            if not found:
-                self.record("L4", "GAP backend: PRINTING qua 'Đánh dấu đã gửi' KHÔNG gửi email",
-                            "❌ FAIL",
-                            "maybeSyncOrderStatus update DB trực tiếp, bỏ qua sendStatusChangeNotification "
-                            "(khớp manual: khách không nhận mail 'đang được in')",
-                            "Backend cần gọi notification khi auto CONFIRMED→PRINTING")
+            # Verify email path thật. Gộp THÀNH 1 dòng: nếu không có mail → 1 FAIL
+            # duy nhất nêu cả triệu chứng (khách không nhận) + nguyên nhân + hướng
+            # sửa (tránh đếm 2 FAIL cho cùng 1 defect).
+            found, preview = self.yop.wait_for_new("đang được in")
+            shot(self.yop.page, "email_L4_dang_in")
+            if found:
+                self.record("L4", "Email khách: 'đang được in'", "✅ PASS",
+                            preview, "subject chứa 'đang được in'")
+            else:
+                self.record(
+                    "L4", "Email 'đang được in' KHÔNG được gửi (GAP backend)", "❌ FAIL",
+                    "Khách KHÔNG nhận mail 'đang được in'. Nguyên nhân: nút 'Đánh dấu đã "
+                    "gửi' chạy maybeSyncOrderStatus update thẳng DB sang PRINTING, bỏ qua "
+                    "sendStatusChangeNotification (khớp check manual QA).",
+                    "Backend cần gọi notification khi auto CONFIRMED→PRINTING")
         else:
             # mark-sent chưa READY (export chậm) → không verify được email qua flow thật
             self.record("L4", "Email 'đang được in' (flow thật)", "⚠️ WARN",

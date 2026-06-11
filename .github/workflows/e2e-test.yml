@@ -56,6 +56,10 @@ jobs:
           TEST_ENV: "test"
           DAILY_TEST_EMAIL: ${{ secrets.DAILY_TEST_EMAIL }}
           DAILY_TEST_PASSWORD: ${{ secrets.DAILY_TEST_PASSWORD }}
+          # ⚠️ BẮT BUỘC cho luồng lifecycle (Admin: xác nhận→in→giao→đã giao + email).
+          # Thiếu 2 biến này → test_lifecycle bị SKIP → report thiếu suite E2E_LIFECYCLE.
+          ADMIN_TEST_EMAIL: ${{ secrets.ADMIN_TEST_EMAIL }}
+          ADMIN_TEST_PASSWORD: ${{ secrets.ADMIN_TEST_PASSWORD }}
           GOOGLE_CHAT_WEBHOOK_URL: ${{ secrets.GOOGLE_CHAT_WEBHOOK_URL_E2E }}
           IMGBB_API_KEY: ${{ secrets.IMGBB_API_KEY }}
         run: |

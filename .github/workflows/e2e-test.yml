@@ -7,9 +7,9 @@ on:
   # Chạy tay khi cần
   workflow_dispatch:
 
-  # Lịch riêng (khác giờ daily để không lẫn log). Mặc định tắt — bật khi sẵn sàng:
-  # schedule:
-  #   - cron: "30 1 * * *"   # 08:30 ICT hàng ngày (sau daily)
+  # Lịch riêng (lệch giờ daily để không lẫn log). 01:30 UTC = 08:30 ICT (sau daily).
+  schedule:
+    - cron: "30 1 * * *"   # 08:30 ICT hàng ngày (sau daily)
 
 jobs:
   e2e:

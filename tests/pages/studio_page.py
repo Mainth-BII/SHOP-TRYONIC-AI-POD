@@ -202,13 +202,17 @@ class StudioPage(BasePage):
             return False
 
     def submit_prompt(self, prompt: str, retries: int = 3) -> bool:
-        """Điền prompt vào ô chat + GỬI, có VERIFY thực sự đã gửi (ô prompt trống lại).
+        """Điền prompt vào ô chat + GỬI. Trả True nếu đã gửi.
 
-        Lý do: nút gửi là icon (lucide-send), không có chữ; trên CI headless việc
-        nhấn Enter thường KHÔNG submit (chỉ xuống dòng) → prompt nằm yên, AI không
-        nhận. Hàm này ưu tiên click nút send icon, fallback Enter, và VERIFY bằng
-        cách kiểm tra ô prompt đã trống (chat clear input sau khi gửi). Trả True nếu
-        gửi thành công.
+        Nút gửi là icon (lucide-send). Trên CI headless nhấn Enter thường KHÔNG
+        submit (chỉ xuống dòng) → ưu tiên CLICK nút send-icon.
+
+        QUAN TRỌNG: click được nút send-icon (visible + enabled) = ĐÃ GỬI — KHÔNG
+        bắt buộc ô prompt phải trống sau đó (app có thể GIỮ text trong ô để user
+        tinh chỉnh/gen lại → 'ô còn text' KHÔNG có nghĩa là chưa gửi; trước đây
+        check này gây FALSE-FAIL dù artwork đã được tạo). Việc artwork có thật sự
+        sinh ra hay không do bước chờ S4 (wait_for_new_artworks) kiểm chứng.
+        Chỉ nhánh fallback Enter mới dùng 'ô trống' làm tín hiệu đã gửi.
         """
         inp = self.prompt_input
         try:
@@ -228,29 +232,29 @@ class StudioPage(BasePage):
                 self.page.wait_for_timeout(1_000)
                 continue
 
-            # Submit: ưu tiên nút send icon (lucide-send), fallback Enter
-            clicked = False
+            # Ưu tiên click nút send-icon (control gửi chính thức) → coi như đã gửi.
             try:
                 btn = self.send_button
                 if btn.is_visible(timeout=2_000) and btn.is_enabled(timeout=1_000):
                     btn.click()
-                    clicked = True
+                    self.page.wait_for_timeout(800)
+                    print(f"  [INFO] prompt đã gửi (send-icon, lần {attempt})")
+                    return True
             except Exception:
                 pass
-            if not clicked:
-                try:
-                    inp.press("Enter")
-                except Exception:
-                    pass
 
-            # VERIFY: ô prompt đã trống (= đã gửi). Chat thường clear input sau gửi.
+            # Không có nút send-icon → fallback Enter; verify bằng ô đã trống.
+            try:
+                inp.press("Enter")
+            except Exception:
+                pass
             self.page.wait_for_timeout(1_000)
             try:
                 val = (inp.input_value() or "").strip()
             except Exception:
                 val = ""
             if val == "":
-                print(f"  [INFO] prompt đã gửi (lần {attempt}, {'send-icon' if clicked else 'Enter'})")
+                print(f"  [INFO] prompt đã gửi (Enter, lần {attempt})")
                 return True
             print(f"  [WARN] prompt CHƯA gửi (ô còn '{val[:30]}…') — thử lại lần {attempt+1}")
 

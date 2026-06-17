@@ -1,0 +1,39 @@
+name: Tryonic AI — Performance (k6, TEST env)
+
+# Tách riêng với daily (PROD) và e2e. CHỈ chạy tay, CHỈ môi trường TEST.
+# Không cron — tránh tải định kỳ ngoài ý muốn lên TEST.
+on:
+  workflow_dispatch:
+    inputs:
+      scenario:
+        description: "Kịch bản (smoke khuyến nghị; load/stress tải nặng)"
+        type: choice
+        default: smoke
+        options: [smoke, load, stress]
+
+jobs:
+  perf:
+    name: k6 ${{ inputs.scenario }} — TEST
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      # 🔒 Guard: không cho phép scenario lạ (defense-in-depth).
+      - name: Guard scenario
+        run: |
+          case "${{ inputs.scenario }}" in
+            smoke|load|stress) echo "✅ scenario=${{ inputs.scenario }}";;
+            *) echo "::error::scenario không hợp lệ"; exit 1;;
+          esac
+
+      - name: Setup k6
+        uses: grafana/setup-k6-action@v1
+
+      - name: Run k6 — tests/performance/${{ inputs.scenario }}.js (TEST)
+        uses: grafana/run-k6-action@v1
+        with:
+          path: tests/performance/${{ inputs.scenario }}.js
+        env:
+          # BASE_URL mặc định = TEST (guard trong config.js vẫn chặn nếu sai).
+          BASE_URL: https://test.shop.tryonic.ai

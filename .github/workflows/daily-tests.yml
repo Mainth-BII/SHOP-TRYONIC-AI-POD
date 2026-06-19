@@ -1,11 +1,12 @@
 name: Tryonic AI — Daily Automated Tests
 
 on:
-  # ── 8:00 ICT (01:00 UTC) mỗi ngày ──────────────────────────────────────────
-  schedule:
-    - cron: "0 1 * * *"    # 08:00 ICT hàng ngày
+  # ── Cron daily ĐÃ TẮT theo yêu cầu — KHÔNG tự chạy hàng ngày nữa.
+  #    Bật lại bằng cách bỏ comment khối dưới (08:00 ICT = 01:00 UTC):
+  # schedule:
+  #   - cron: "0 1 * * *"    # 08:00 ICT hàng ngày
 
-  # ── Manual trigger ──────────────────────────────────────────────────────────
+  # ── Manual trigger (vẫn chạy tay được qua nút Run workflow) ─────────────────
   workflow_dispatch:
 
   # ── Push trigger đã tắt — tốn ~90 min mỗi push (3 jobs × 30 min)
